@@ -84,6 +84,7 @@ UI Svelte (`src/`) -> commandes Tauri (`src-tauri/src/commands.rs`, frontiere IP
 | `PairEditModal.svelte` | Modale d'ajout/edition d'une paire (chemins, intervalle propre, notifications, patterns d'exclusion). |
 | `DryRunModal.svelte` | Modale d'apercu (dry-run) : liste copies/ecrasements/suppressions, volume total, alerte seuil de securite avant execution. |
 | `ConfirmModal.svelte` | Modale de confirmation in-app (rendue une fois dans le layout), pilotee par `confirm.svelte.ts` ; Echap = annuler, Entree = confirmer, bouton danger. Remplace les popups systeme. |
+| `ExclusionAddModal.svelte` | Popup d'ajout/modification d'une exclusion globale : modes Dossier (parcourir/nom, recursif), Fichiers (selection OS multiple/nom), Manuel (glob libre), avec apercu du motif. Utilisee par l'onglet `/exclusions`. |
 | `StatusBadge.svelte` | Badge de statut d'une paire (À jour / Synchro… / Erreur / Désactivé) avec pastille de couleur. |
 | `Switch.svelte` | Interrupteur on/off reutilisable (bindable). |
 | `ProgressBar.svelte` | Barre de progression (deterministe `done/total` ou indeterminee). |

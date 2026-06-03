@@ -68,11 +68,10 @@ impl Default for Settings {
             start_minimized: false,
             confirm_deletes_with_dry_run: true,
             ignore_patterns: vec![
+                "**/.*".into(),
                 "**/*.tmp".into(),
                 "**/~$*".into(),
                 "**/Thumbs.db".into(),
-                "**/.DS_Store".into(),
-                "**/.git/**".into(),
             ],
             verify_by_content: "off".into(),
             mtime_tolerance_sec: 2,

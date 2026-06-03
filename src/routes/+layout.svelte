@@ -38,6 +38,7 @@
 
   const nav = [
     { href: "/", label: "Tableau de bord", icon: "▦" },
+    { href: "/exclusions", label: "Exclusions", icon: "⊘" },
     { href: "/settings", label: "Réglages", icon: "⚙" },
     { href: "/logs", label: "Journal", icon: "≣" },
   ];

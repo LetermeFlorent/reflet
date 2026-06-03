@@ -31,6 +31,12 @@ export const api = {
     const r = await open({ directory: true, multiple: false });
     return typeof r === "string" ? r : null;
   },
+
+  pickFiles: async (): Promise<string[]> => {
+    const r = await open({ multiple: true });
+    if (!r) return [];
+    return Array.isArray(r) ? r : [r];
+  },
 };
 
 export { listen };
