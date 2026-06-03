@@ -5,6 +5,7 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { store } from "$lib/store.svelte";
   import { api } from "$lib/ipc";
+  import ConfirmModal from "$lib/components/ConfirmModal.svelte";
 
   let { children } = $props();
 
@@ -71,6 +72,8 @@
     <button class="toast {t.kind}" onclick={() => store.dismiss(t.id)}>{t.message}</button>
   {/each}
 </div>
+
+<ConfirmModal />
 
 <style>
   .app {

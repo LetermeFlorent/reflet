@@ -168,7 +168,7 @@
     <div class="row actions">
       <div class="spacer"></div>
       <button class="btn" onclick={onClose}>Annuler</button>
-      <button class="btn btn-primary" onclick={save} disabled={!canSave}>
+      <button class="btn" onclick={save} disabled={!canSave}>
         {saving ? "Enregistrement…" : "Enregistrer"}
       </button>
     </div>

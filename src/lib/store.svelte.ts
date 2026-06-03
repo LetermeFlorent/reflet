@@ -38,6 +38,7 @@ class Store {
   progress = $state<Progress | null>(null);
   toasts = $state<Toast[]>([]);
   loaded = $state(false);
+  rev = $state(0);
 
   private toastSeq = 1;
 
@@ -48,6 +49,7 @@ class Store {
     this.schedulerRunning = s.schedulerRunning;
     this.syncBusy = s.syncBusy;
     this.loaded = true;
+    this.rev++;
   }
 
   private mergePairs(incoming: SyncPair[]) {

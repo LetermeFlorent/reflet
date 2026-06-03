@@ -55,6 +55,8 @@ pub struct Settings {
     pub notify_pc: bool,
     #[serde(default)]
     pub notify_app: bool,
+    #[serde(default = "default_true")]
+    pub compact_cards: bool,
 }
 
 impl Default for Settings {
@@ -78,6 +80,7 @@ impl Default for Settings {
             scheduler_running: true,
             notify_pc: false,
             notify_app: false,
+            compact_cards: true,
         }
     }
 }

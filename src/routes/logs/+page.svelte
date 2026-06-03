@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api, listen, type UnlistenFn } from "$lib/ipc";
   import { store } from "$lib/store.svelte";
+  import { confirmCtl } from "$lib/confirm.svelte";
   import type { LogEntry } from "$lib/types";
   import { formatDate } from "$lib/format";
   import Select from "$lib/components/Select.svelte";
@@ -28,7 +29,11 @@
   });
 
   async function clear() {
-    const ok = await api.confirm("Vider le journal ?");
+    const ok = await confirmCtl.ask("Vider le journal ?", {
+      title: "Vider le journal",
+      confirmLabel: "Vider",
+      danger: true,
+    });
     if (!ok) return;
     await api.clearLogs();
     reload();

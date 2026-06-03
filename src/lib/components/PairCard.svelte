@@ -20,6 +20,7 @@
       : 0,
   );
   const indeterminate = $derived(isSyncing && (!store.progress || store.progress.total === 0));
+  const compact = $derived(store.settings?.compactCards ?? false);
 
   let etaSec = $state<number | null>(null);
   let startAt = 0;
@@ -60,6 +61,7 @@
   let nextSec = $state<number | null>(null);
 
   $effect(() => {
+    void store.rev;
     const ns = pair.nextRunSec;
     if (ns == null) {
       nextSec = null;
@@ -130,7 +132,9 @@
           Synchro… {indeterminate ? "…" : pct + " %"}{#if etaSec !== null} · ~{formatDur(etaSec)} restant{/if}
         </span>
       {:else}
-        {#if pair.lastRun}
+        {#if compact}
+          {pair.lastRun ? (pair.lastRun.errors > 0 ? "Synchro avec erreurs" : "À jour") : "Jamais synchronisé"}
+        {:else if pair.lastRun}
           Dernière : {formatDate(pair.lastRun.at)} ·
           <span style="color:var(--green)">{pair.lastRun.copied}</span> copiés ·
           <span style="color:var(--accent)">{pair.lastRun.updated}</span> màj ·

@@ -57,7 +57,7 @@
 <header class="page-head">
   <h1>Réglages</h1>
   <div class="spacer"></div>
-  <button class="btn btn-primary" onclick={save} disabled={saving || !local}>
+  <button class="btn" onclick={save} disabled={saving || !local}>
     {saving ? "Enregistrement…" : "Enregistrer"}
   </button>
 </header>
@@ -180,11 +180,33 @@
     </section>
 
     <section class="card">
+      <h2>Affichage</h2>
+
+      <div class="setting">
+        <div class="info">
+          <div class="name">Cartes compactes</div>
+          <div class="muted">
+            La ligne du bas n'affiche que le statut court (« À jour » / « Jamais synchronisé ») +
+            le temps avant la prochaine synchro, au lieu du détail copiés/màj/suppr.
+          </div>
+        </div>
+        <Switch bind:checked={local.compactCards} />
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Exclusions globales</h2>
       <p class="muted" style="margin-bottom:var(--s2)">
         Motifs glob (un par ligne) appliqués à toutes les paires, en plus des exclusions propres à
-        chaque paire.
+        chaque paire. Comparés au chemin relatif (séparateur «&nbsp;/&nbsp;»).
+        Mets <code>**/</code> devant pour matcher à toute profondeur :
       </p>
+      <ul class="muted hints">
+        <li><code>**/*.tmp</code> — un type de fichier (toutes les extensions .tmp)</li>
+        <li><code>**/node_modules/**</code> — un dossier entier et son contenu</li>
+        <li><code>**/secret.txt</code> — un fichier précis, où qu'il soit</li>
+        <li><code>cache/**</code> — un dossier à la racine de la paire</li>
+      </ul>
       <textarea class="input" rows="5" bind:value={ignoreText}></textarea>
     </section>
   </div>
@@ -248,5 +270,20 @@
     color: var(--red);
     font-size: 13px;
     margin-top: var(--s2);
+  }
+  .hints {
+    margin: 0 0 var(--s3);
+    padding-left: 18px;
+    font-size: 12px;
+  }
+  .hints li {
+    margin: 2px 0;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    background: var(--hover);
+    padding: 1px 5px;
+    border-radius: 4px;
   }
 </style>

@@ -92,7 +92,7 @@
     <div class="row actions">
       <div class="spacer"></div>
       <button class="btn" onclick={onClose}>Fermer</button>
-      <button class="btn btn-primary" onclick={onConfirm} disabled={loading || !plan || nothing}>
+      <button class="btn" onclick={onConfirm} disabled={loading || !plan || nothing}>
         Appliquer maintenant
       </button>
     </div>

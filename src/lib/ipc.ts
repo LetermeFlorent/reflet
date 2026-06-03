@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { open, confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { AppStateDto, LogEntry, NewPair, Settings, SyncPair, SyncPlan } from "./types";
 
 export const api = {
@@ -31,9 +31,6 @@ export const api = {
     const r = await open({ directory: true, multiple: false });
     return typeof r === "string" ? r : null;
   },
-
-  confirm: (message: string, title = "Reflet"): Promise<boolean> =>
-    confirmDialog(message, { title, kind: "warning" }),
 };
 
 export { listen };

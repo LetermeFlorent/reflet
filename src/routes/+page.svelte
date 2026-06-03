@@ -1,6 +1,7 @@
 <script lang="ts">
   import { store } from "$lib/store.svelte";
   import { api } from "$lib/ipc";
+  import { confirmCtl } from "$lib/confirm.svelte";
   import type { SyncPair, SyncPlan } from "$lib/types";
   import PairCard from "$lib/components/PairCard.svelte";
   import PairEditModal from "$lib/components/PairEditModal.svelte";
@@ -13,8 +14,9 @@
   let dryLoading = $state(false);
 
   async function confirmDelete(p: SyncPair) {
-    const ok = await api.confirm(
+    const ok = await confirmCtl.ask(
       `Supprimer la paire « ${p.name} » ? Les dossiers source et destination ne sont pas touchés.`,
+      { title: "Supprimer la paire", confirmLabel: "Supprimer", danger: true },
     );
     if (!ok) return;
     try {
@@ -81,7 +83,7 @@
     <button class="btn btn-sm" onclick={syncAll} disabled={store.syncBusy || store.pairs.length === 0}>
       Tout synchroniser
     </button>
-    <button class="btn btn-sm btn-primary" onclick={() => (editing = null)}>+ Ajouter</button>
+    <button class="btn btn-sm" onclick={() => (editing = null)}>+ Ajouter</button>
   </header>
 
   <div class="dash-scroll">
@@ -93,7 +95,7 @@
           <div class="empty-logo">◑</div>
           <h2>Aucune paire de synchronisation</h2>
           <p class="muted">Ajoute un dossier source et sa destination pour commencer.</p>
-          <button class="btn btn-primary" onclick={() => (editing = null)}>Ajouter une paire</button>
+          <button class="btn" onclick={() => (editing = null)}>Ajouter une paire</button>
         </div>
       </div>
     {:else}

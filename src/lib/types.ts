@@ -46,6 +46,7 @@ export interface Settings {
   schedulerRunning: boolean;
   notifyPc: boolean;
   notifyApp: boolean;
+  compactCards: boolean;
 }
 
 export interface AppStateDto {
