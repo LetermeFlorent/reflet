@@ -1,5 +1,6 @@
 
 use crate::config::Config;
+use crate::watcher::WatcherManager;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::AtomicBool;
@@ -35,6 +36,7 @@ pub struct AppState {
     pub sync_busy: AtomicBool,
     pub sync_tx: Mutex<Option<Sender<SyncRequest>>>,
     pub last_started: Mutex<HashMap<String, Instant>>,
+    pub watcher_manager: Mutex<Option<WatcherManager>>,
 }
 
 impl AppState {
@@ -49,6 +51,7 @@ impl AppState {
             sync_busy: AtomicBool::new(false),
             sync_tx: Mutex::new(None),
             last_started: Mutex::new(HashMap::new()),
+            watcher_manager: Mutex::new(None),
         }
     }
 

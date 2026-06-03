@@ -144,6 +144,14 @@ pub struct NewPair {
     pub notify_app: bool,
     #[serde(default)]
     pub ignore_patterns: Vec<String>,
+    #[serde(default)]
+    pub watch_realtime: bool,
+    #[serde(default)]
+    pub schedule_times: Vec<String>,
+    #[serde(default)]
+    pub min_file_size: u64,
+    #[serde(default)]
+    pub max_file_size: u64,
 }
 
 fn default_true() -> bool {
@@ -159,23 +167,36 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
         return Err("Source et destination imbriquées (interdit)".into());
     }
     let id = uuid::Uuid::new_v4().to_string();
+    let source = new.source.clone();
+    let watch_realtime = new.watch_realtime;
+    let enabled = new.enabled;
     let pair = SyncPair {
         id: id.clone(),
         name: if new.name.trim().is_empty() {
-            new.source.clone()
+            source.clone()
         } else {
             new.name
         },
-        source: new.source,
+        source,
         destination: new.destination,
-        enabled: new.enabled,
+        enabled,
         interval_sec_override: new.interval_sec_override,
         notify_pc: new.notify_pc,
         notify_app: new.notify_app,
         ignore_patterns: new.ignore_patterns,
+        watch_realtime,
+        schedule_times: new.schedule_times.clone(),
+        min_file_size: new.min_file_size,
+        max_file_size: new.max_file_size,
         last_run: None,
     };
+    let source = pair.source.clone();
     state.config.lock().unwrap().pairs.push(pair);
+    if enabled && watch_realtime {
+        if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
+            wm.start(&id, &source);
+        }
+    }
     persist(&app, &state)?;
     notify_state_changed(&app);
     Ok(id)
@@ -186,10 +207,20 @@ pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Re
     if sync::paths_overlap(&pair.source, &pair.destination) {
         return Err("Source et destination imbriquées (interdit)".into());
     }
+    let old_source: Option<String>;
+    let old_enabled: bool;
+    let old_watch: bool;
+    let id = pair.id.clone();
+    let new_source = pair.source.clone();
+    let new_enabled = pair.enabled;
+    let new_watch = pair.watch_realtime;
     {
         let mut cfg = state.config.lock().unwrap();
         match cfg.pairs.iter_mut().find(|p| p.id == pair.id) {
             Some(existing) => {
+                old_source = Some(existing.source.clone());
+                old_enabled = existing.enabled;
+                old_watch = existing.watch_realtime;
                 existing.name = pair.name;
                 existing.source = pair.source;
                 existing.destination = pair.destination;
@@ -198,8 +229,24 @@ pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Re
                 existing.notify_pc = pair.notify_pc;
                 existing.notify_app = pair.notify_app;
                 existing.ignore_patterns = pair.ignore_patterns;
+                existing.watch_realtime = pair.watch_realtime;
+                existing.schedule_times = pair.schedule_times;
+                existing.min_file_size = pair.min_file_size;
+                existing.max_file_size = pair.max_file_size;
             }
             None => return Err("Paire introuvable".into()),
+        }
+    }
+    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
+        let was_watching = old_enabled && old_watch;
+        let will_watch = new_enabled && new_watch;
+        if was_watching && !will_watch {
+            wm.stop(&id);
+        } else if !was_watching && will_watch {
+            wm.start(&id, &new_source);
+        } else if was_watching && will_watch && old_source != Some(new_source.clone()) {
+            wm.stop(&id);
+            wm.start(&id, &new_source);
         }
     }
     persist(&app, &state)?;
@@ -214,6 +261,9 @@ pub fn delete_pair(app: AppHandle, state: State<AppState>, id: String) -> Result
         cfg.pairs.retain(|p| p.id != id);
     }
     state.statuses.lock().unwrap().remove(&id);
+    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
+        wm.stop(&id);
+    }
     persist(&app, &state)?;
     notify_state_changed(&app);
     Ok(())
@@ -221,13 +271,84 @@ pub fn delete_pair(app: AppHandle, state: State<AppState>, id: String) -> Result
 
 #[tauri::command]
 pub fn set_pair_enabled(app: AppHandle, state: State<AppState>, id: String, enabled: bool) -> Result<(), String> {
+    let source: Option<String>;
+    let watch: bool;
     {
         let mut cfg = state.config.lock().unwrap();
-        if let Some(p) = cfg.pairs.iter_mut().find(|p| p.id == id) {
-            p.enabled = enabled;
+        let pair = cfg.pairs.iter_mut().find(|p| p.id == id);
+        match pair {
+            Some(p) => {
+                p.enabled = enabled;
+                source = Some(p.source.clone());
+                watch = p.watch_realtime;
+            }
+            None => return Err("Paire introuvable".into()),
+        }
+    }
+    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
+        if enabled && watch {
+            if let Some(src) = &source {
+                wm.start(&id, src);
+            }
+        } else {
+            wm.stop(&id);
         }
     }
     persist(&app, &state)?;
+    notify_state_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_pair_watch_realtime(app: AppHandle, state: State<AppState>, id: String, watch: bool) -> Result<(), String> {
+    let enabled: bool;
+    let source: Option<String>;
+    {
+        let mut cfg = state.config.lock().unwrap();
+        let pair = cfg.pairs.iter_mut().find(|p| p.id == id);
+        match pair {
+            Some(p) => {
+                p.watch_realtime = watch;
+                enabled = p.enabled;
+                source = Some(p.source.clone());
+            }
+            None => return Err("Paire introuvable".into()),
+        }
+    }
+    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
+        if enabled && watch {
+            if let Some(src) = &source {
+                wm.start(&id, src);
+            }
+        } else {
+            wm.stop(&id);
+        }
+    }
+    persist(&app, &state)?;
+    notify_state_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reorder_pairs(app: AppHandle, state: State<AppState>, ordered_ids: Vec<String>) -> Result<(), String> {
+    let mut cfg = state.config.lock().unwrap();
+    let pairs = std::mem::take(&mut cfg.pairs);
+    let pair_map: std::collections::HashMap<&str, SyncPair> = pairs.iter().map(|p| (p.id.as_str(), p.clone())).collect();
+    let mut reordered: Vec<SyncPair> = Vec::with_capacity(ordered_ids.len());
+    for id in &ordered_ids {
+        if let Some(p) = pair_map.get(id.as_str()) {
+            reordered.push(p.clone());
+        }
+    }
+    for p in pairs {
+        if !ordered_ids.contains(&p.id) {
+            reordered.push(p);
+        }
+    }
+    cfg.pairs = reordered;
+    let snapshot = cfg.clone();
+    drop(cfg);
+    config::save(&app, &snapshot)?;
     notify_state_changed(&app);
     Ok(())
 }

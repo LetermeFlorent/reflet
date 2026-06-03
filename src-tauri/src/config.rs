@@ -35,6 +35,14 @@ pub struct SyncPair {
     #[serde(default)]
     pub ignore_patterns: Vec<String>,
     #[serde(default)]
+    pub watch_realtime: bool,
+    #[serde(default)]
+    pub schedule_times: Vec<String>,
+    #[serde(default)]
+    pub min_file_size: u64,
+    #[serde(default)]
+    pub max_file_size: u64,
+    #[serde(default)]
     pub last_run: Option<LastRun>,
 }
 

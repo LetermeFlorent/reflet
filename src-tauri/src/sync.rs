@@ -226,6 +226,8 @@ fn detect_changed(src: &Entry, dst: &Entry, settings: &Settings) -> (bool, Strin
 fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> {
     let source = PathBuf::from(&pair.source);
     let dest = PathBuf::from(&pair.destination);
+    let min_size = pair.min_file_size;
+    let max_size = pair.max_file_size;
 
     if pair.source.trim().is_empty() || pair.destination.trim().is_empty() {
         return Err("Source ou destination vide".into());
@@ -244,8 +246,20 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
     patterns.extend(pair.ignore_patterns.clone());
     let ignore = build_globset(&patterns);
 
-    let src_map = walk_tree(&source, &ignore);
-    let dest_map = walk_tree(&dest, &ignore);
+    let mut src_map = walk_tree(&source, &ignore);
+    let mut dest_map = walk_tree(&dest, &ignore);
+
+    if min_size > 0 || max_size > 0 {
+        let filter_size = |e: &Entry| {
+            if e.is_dir { return true; }
+            if min_size > 0 && e.size < min_size { return false; }
+            if max_size > 0 && e.size > max_size { return false; }
+            true
+        };
+        src_map.retain(|_, e| filter_size(e));
+        dest_map.retain(|_, e| filter_size(e));
+    }
+
     let dest_total = dest_map.len();
 
     let mut create_dirs: Vec<(String, PathBuf)> = Vec::new();

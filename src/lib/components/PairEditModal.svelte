@@ -23,6 +23,11 @@
   let notifyApp = $state(pair?.notifyApp ?? true);
   let ignoreList = $state<string[]>([...(pair?.ignorePatterns ?? [])]);
   let intervalSec = $state<number | null>(pair?.intervalSecOverride ?? null);
+  let watchRealtime = $state(pair?.watchRealtime ?? false);
+  let scheduleTimes = $state<string[]>([...(pair?.scheduleTimes ?? [])]);
+  let scheduleInput = $state("");
+  let minFileSize = $state(pair?.minFileSize ?? 0);
+  let maxFileSize = $state(pair?.maxFileSize ?? 0);
   let saving = $state(false);
 
   function excAdd(ps: string[]) {
@@ -68,6 +73,7 @@
     saving = true;
     const ignorePatterns = $state.snapshot(ignoreList);
     const intervalSecOverride = intervalSec;
+    const times = $state.snapshot(scheduleTimes).filter(t => /^\d{2}:\d{2}$/.test(t));
     try {
       if (isEdit && pair) {
         await api.updatePair({
@@ -80,6 +86,10 @@
           notifyPc,
           notifyApp,
           ignorePatterns,
+          watchRealtime,
+          scheduleTimes: times,
+          minFileSize,
+          maxFileSize,
         });
       } else {
         await api.addPair({
@@ -91,6 +101,10 @@
           notifyPc,
           notifyApp,
           ignorePatterns,
+          watchRealtime,
+          scheduleTimes: times,
+          minFileSize,
+          maxFileSize,
         });
       }
       onSaved();
@@ -148,6 +162,36 @@
         </span>
       </div>
 
+      <div class="row fields-row">
+        <div class="field" style="flex:1">
+          <span class="label">Taille min. (octets)</span>
+          <input class="input" type="number" min="0" bind:value={minFileSize} placeholder="0 = aucun filtre" />
+        </div>
+        <div class="field" style="flex:1">
+          <span class="label">Taille max. (octets)</span>
+          <input class="input" type="number" min="0" bind:value={maxFileSize} placeholder="0 = aucun filtre" />
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="label">Planification avancée (horaires spécifiques)</span>
+        <div class="row">
+          <input class="input" style="width:100px" placeholder="HH:MM" bind:value={scheduleInput} onkeydown={(e) => { if (e.key === 'Enter' && /^\d{2}:\d{2}$/.test(scheduleInput)) { scheduleTimes = [...scheduleTimes, scheduleInput]; scheduleInput = ''; } }} />
+          <button class="btn btn-sm" onclick={() => { if (/^\d{2}:\d{2}$/.test(scheduleInput)) { scheduleTimes = [...scheduleTimes, scheduleInput]; scheduleInput = ''; } }} disabled={!/^\d{2}:\d{2}$/.test(scheduleInput)}>Ajouter</button>
+        </div>
+        {#if scheduleTimes.length > 0}
+          <div class="chips" style="margin-top:6px">
+            {#each scheduleTimes as t, i}
+              <span class="chip">
+                {t}
+                <button class="chip-x" onclick={() => { scheduleTimes = scheduleTimes.filter((_, j) => j !== i); }}>×</button>
+              </span>
+            {/each}
+          </div>
+        {/if}
+        <span class="muted" style="font-size:12px">Laisse vide pour utiliser l'intervalle classique.</span>
+      </div>
+
       <div class="field">
         <span class="label">Exclusions propres à cette paire (en plus des exclusions globales)</span>
         <ExclusionsManager
@@ -164,6 +208,10 @@
           <span>Activée</span>
         </label>
         <label class="tg">
+          <Switch bind:checked={watchRealtime} />
+          <span>Temps réel</span>
+        </label>
+        <label class="tg">
           <Switch bind:checked={notifyPc} />
           <span>Notif PC</span>
         </label>
@@ -173,6 +221,7 @@
         </label>
       </div>
       <p class="muted" style="font-size:12px">
+        <strong>Temps réel</strong> surveille le dossier source et déclenche une synchro dès qu'un changement est détecté (avec un délai de 3 secondes).<br />
         Les notifs ne s'affichent que si le type est aussi activé dans Réglages (interrupteur
         maître).
       </p>
@@ -220,5 +269,34 @@
     background: color-mix(in srgb, var(--red) 14%, transparent);
     color: var(--red);
     font-size: 13px;
+  }
+  .fields-row {
+    gap: var(--s4);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: var(--r-full);
+    background: var(--bg-2);
+    font-size: 12px;
+  }
+  .chip-x {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--text-2);
+    padding: 0 2px;
+  }
+  .chip-x:hover {
+    color: var(--red);
   }
 </style>

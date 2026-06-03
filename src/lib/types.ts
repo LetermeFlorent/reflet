@@ -17,6 +17,10 @@ export interface SyncPair {
   notifyPc: boolean;
   notifyApp: boolean;
   ignorePatterns: string[];
+  watchRealtime: boolean;
+  scheduleTimes: string[];
+  minFileSize: number;
+  maxFileSize: number;
   lastRun?: LastRun | null;
   status: string;
   nextRunSec?: number | null;
@@ -31,6 +35,10 @@ export interface NewPair {
   notifyPc: boolean;
   notifyApp: boolean;
   ignorePatterns: string[];
+  watchRealtime: boolean;
+  scheduleTimes: string[];
+  minFileSize: number;
+  maxFileSize: number;
 }
 
 export interface Settings {

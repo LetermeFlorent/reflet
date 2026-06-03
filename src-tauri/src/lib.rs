@@ -6,10 +6,12 @@ mod scheduler;
 mod state;
 mod sync;
 mod tray;
+mod watcher;
 
 use state::AppState;
 use std::sync::atomic::Ordering;
 use tauri::Manager;
+use watcher::WatcherManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -49,7 +51,15 @@ pub fn run() {
             let tx = scheduler::start(handle.clone());
             {
                 let state = handle.state::<AppState>();
-                *state.sync_tx.lock().unwrap() = Some(tx);
+                *state.sync_tx.lock().unwrap() = Some(tx.clone());
+                let mut wm = WatcherManager::new(tx);
+                let cfg = state.config.lock().unwrap();
+                for p in &cfg.pairs {
+                    if p.enabled && p.watch_realtime {
+                        wm.start(&p.id, &p.source);
+                    }
+                }
+                *state.watcher_manager.lock().unwrap() = Some(wm);
             }
 
             tray::build(&handle)?;
@@ -89,6 +99,8 @@ pub fn run() {
             commands::update_pair,
             commands::delete_pair,
             commands::set_pair_enabled,
+            commands::set_pair_watch_realtime,
+            commands::reorder_pairs,
             commands::sync_now,
             commands::sync_all,
             commands::dry_run,

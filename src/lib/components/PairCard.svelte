@@ -77,10 +77,18 @@
   });
 
   const intervalLabel = $derived.by(() => {
+    if (pair.scheduleTimes?.length > 0) {
+      return pair.scheduleTimes.join(', ');
+    }
     const ov = pair.intervalSecOverride;
     if (ov != null && ov > 0) return formatInterval(ov);
     const g = store.settings?.intervalSec ?? 900;
     return `${formatInterval(g)} (défaut)`;
+  });
+
+  const intervalTitle = $derived.by(() => {
+    if (pair.scheduleTimes?.length > 0) return "Planifié à des horaires spécifiques";
+    return "Intervalle de synchro automatique";
   });
 
   async function toggle(enabled: boolean) {
@@ -102,22 +110,25 @@
 </script>
 
 <div class="card pair">
-  <div class="top">
-    <div class="title">
-      <h2>{pair.name}</h2>
-      <StatusBadge status={pair.status} />
+    <div class="top">
+      <div class="title">
+        <h2>{pair.name}</h2>
+        <StatusBadge status={pair.status} />
+      </div>
+      {#if pair.watchRealtime && pair.enabled}
+        <span class="badge live" title="Surveillance temps réel active">● Live</span>
+      {/if}
+      <span class="interval badge" title={intervalTitle}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.3" />
+          <path d="M8 5.5V8.5L10 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          <path d="M6 1.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+        </svg>
+        {intervalLabel}
+      </span>
+      <div class="spacer"></div>
+      <Switch checked={pair.enabled} onchange={toggle} />
     </div>
-    <span class="interval badge" title="Intervalle de synchro automatique">
-      <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-        <circle cx="8" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.3" />
-        <path d="M8 5.5V8.5L10 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-        <path d="M6 1.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-      </svg>
-      {intervalLabel}
-    </span>
-    <div class="spacer"></div>
-    <Switch checked={pair.enabled} onchange={toggle} />
-  </div>
 
   <div class="paths mono">
     <span class="path" title={pair.source}>{pair.source}</span>
@@ -267,6 +278,10 @@
   .next {
     margin-left: 4px;
     color: var(--text-2);
+  }
+  .live {
+    background: color-mix(in srgb, var(--green) 18%, transparent);
+    color: var(--green);
   }
   .actions {
     display: flex;

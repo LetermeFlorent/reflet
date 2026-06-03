@@ -13,6 +13,38 @@
   let dryPlan = $state<SyncPlan | null>(null);
   let dryLoading = $state(false);
 
+  let searchQuery = $state("");
+  let dragIndex = $state<number | null>(null);
+
+  const filteredPairs = $derived.by(() => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return store.pairs;
+    return store.pairs.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.source.toLowerCase().includes(q) ||
+        p.destination.toLowerCase().includes(q),
+    );
+  });
+
+  function dragStart(e: DragEvent, i: number) {
+    dragIndex = i;
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+  }
+  function dragOver(e: DragEvent, i: number) {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === i) return;
+    const arr = [...store.pairs];
+    const [moved] = arr.splice(dragIndex, 1);
+    arr.splice(i, 0, moved);
+    store.pairs = arr;
+    dragIndex = i;
+  }
+  function dragEnd() {
+    dragIndex = null;
+    api.reorderPairs(store.pairs.map((p) => p.id)).catch(() => {});
+  }
+
   async function confirmDelete(p: SyncPair) {
     const ok = await confirmCtl.ask(
       `Supprimer la paire « ${p.name} » ? Les dossiers source et destination ne sont pas touchés.`,
@@ -76,6 +108,9 @@
 <div class="dash">
   <header class="page-head">
     <h1>Tableau de bord</h1>
+    <div class="search-wrap">
+      <input class="input search-input" bind:value={searchQuery} placeholder="Rechercher une paire…" />
+    </div>
     <div class="spacer"></div>
     <button class="btn btn-sm" onclick={toggleScheduler}>
       {store.schedulerRunning ? "Mettre en pause" : "Reprendre"}
@@ -98,15 +133,33 @@
           <button class="btn" onclick={() => (editing = null)}>Ajouter une paire</button>
         </div>
       </div>
+    {:else if filteredPairs.length === 0 && searchQuery}
+      <div class="empty-wrap">
+        <div class="card empty">
+          <div class="empty-logo">◑</div>
+          <h2>Aucun résultat</h2>
+          <p class="muted">Aucune paire ne correspond à « {searchQuery} ».</p>
+        </div>
+      </div>
     {:else}
       <div class="list">
-        {#each store.pairs as p (p.id)}
-          <PairCard
-            pair={p}
-            onEdit={() => (editing = p)}
-            onDryRun={() => openDry(p)}
-            onDelete={() => confirmDelete(p)}
-          />
+        {#each filteredPairs as p, i (p.id)}
+          <div
+            class="pair-drag"
+            draggable="true"
+            role="listitem"
+            ondragstart={(e) => dragStart(e, i)}
+            ondragover={(e) => dragOver(e, i)}
+            ondragend={dragEnd}
+          >
+            <span class="drag-handle" title="Déplacer pour réordonner">⠿</span>
+            <PairCard
+              pair={p}
+              onEdit={() => (editing = p)}
+              onDryRun={() => openDry(p)}
+              onDelete={() => confirmDelete(p)}
+            />
+          </div>
         {/each}
       </div>
     {/if}
@@ -181,5 +234,38 @@
     line-height: 1;
     color: var(--accent);
     opacity: 0.55;
+  }
+  .search-wrap {
+    flex: 0 0 220px;
+    margin: 0 var(--s3);
+  }
+  .search-input {
+    font-size: 13px;
+    padding: 6px 10px;
+  }
+  .pair-drag {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    border-radius: var(--r-card);
+    cursor: default;
+  }
+  .pair-drag:active {
+    opacity: 0.7;
+  }
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    flex: 0 0 auto;
+    cursor: grab;
+    color: var(--text-3);
+    font-size: 18px;
+    letter-spacing: -2px;
+    user-select: none;
+  }
+  .drag-handle:hover {
+    color: var(--accent);
   }
 </style>

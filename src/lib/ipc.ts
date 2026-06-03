@@ -15,6 +15,10 @@ export const api = {
   deletePair: (id: string) => invoke<void>("delete_pair", { id }),
   setPairEnabled: (id: string, enabled: boolean) =>
     invoke<void>("set_pair_enabled", { id, enabled }),
+  setPairWatchRealtime: (id: string, watch: boolean) =>
+    invoke<void>("set_pair_watch_realtime", { id, watch }),
+  reorderPairs: (orderedIds: string[]) =>
+    invoke<void>("reorder_pairs", { orderedIds }),
 
   syncNow: (id: string) => invoke<void>("sync_now", { id }),
   syncAll: () => invoke<void>("sync_all"),
