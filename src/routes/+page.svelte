@@ -6,7 +6,6 @@
   import PairEditModal from "$lib/components/PairEditModal.svelte";
   import DryRunModal from "$lib/components/DryRunModal.svelte";
 
-  // undefined = modal fermé ; null = nouvelle paire ; SyncPair = édition
   let editing = $state<SyncPair | null | undefined>(undefined);
 
   let dryPair = $state<SyncPair | null>(null);
@@ -146,7 +145,6 @@
     gap: var(--s2);
     margin-bottom: var(--s4);
   }
-  /* seule cette zone scrolle */
   .dash-scroll {
     flex: 1 1 auto;
     min-height: 0;

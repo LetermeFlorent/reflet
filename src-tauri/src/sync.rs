@@ -1,10 +1,3 @@
-//! Moteur de synchronisation miroir unidirectionnelle (source -> destination).
-//!
-//! La source fait autorité : la destination est rendue identique (copie des
-//! nouveautés, écrasement des fichiers différents, suppression des extras).
-//! Sécurités : copie atomique, stamp mtime, suppression vers la corbeille,
-//! seuil de sécurité anti-wipe, source manquante => abandon (jamais de wipe).
-
 use crate::config::{Settings, SyncPair};
 use crate::state::{AppState, LogEntry};
 use chrono::Utc;
@@ -20,10 +13,6 @@ use walkdir::WalkDir;
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-// ----------------------------------------------------------------------------
-// Types
-// ----------------------------------------------------------------------------
-
 #[derive(Clone)]
 struct Entry {
     rel: String,
@@ -38,7 +27,7 @@ struct CopyOp {
     src_abs: PathBuf,
     dst_abs: PathBuf,
     size: u64,
-    reason: String, // new | size | mtime | content
+    reason: String,
     is_new: bool,
 }
 
@@ -49,7 +38,7 @@ struct DeleteOp {
 }
 
 struct ExecPlan {
-    create_dirs: Vec<(String, PathBuf)>, // (rel, abs)
+    create_dirs: Vec<(String, PathBuf)>,
     copies: Vec<CopyOp>,
     deletes: Vec<DeleteOp>,
     total_bytes: u64,
@@ -89,10 +78,6 @@ pub struct SyncOutcome {
     pub aborted_safety: bool,
 }
 
-// ----------------------------------------------------------------------------
-// Helpers chemins / ignore
-// ----------------------------------------------------------------------------
-
 fn now_iso() -> String {
     Utc::now().to_rfc3339()
 }
@@ -116,7 +101,6 @@ fn norm_path(p: &str) -> String {
     }
 }
 
-/// Vrai si l'un des chemins est imbriqué dans l'autre (ou identiques).
 pub fn paths_overlap(a: &str, b: &str) -> bool {
     let (na, nb) = (norm_path(a), norm_path(b));
     if na == nb {
@@ -140,9 +124,6 @@ fn build_globset(patterns: &[String]) -> GlobSet {
     b.build().unwrap_or_else(|_| GlobSet::empty())
 }
 
-/// Vrai si l'entrée est un point de reparse : symlink (Win+Linux) ou jonction /
-/// mount-point Windows (ex. "Ma musique" dans Documents). On les ignore pour ne
-/// jamais tenter de les copier (sinon `os error 2`) ni descendre dedans.
 fn is_reparse_point(entry: &walkdir::DirEntry) -> bool {
     if entry.file_type().is_symlink() {
         return true;
@@ -172,7 +153,7 @@ fn walk_tree(root: &Path, ignore: &GlobSet) -> BTreeMap<String, Entry> {
                 return true;
             }
             if is_reparse_point(e) {
-                return false; // ne pas descendre dans les jonctions/symlinks
+                return false;
             }
             match p.strip_prefix(root) {
                 Ok(rel) => {
@@ -190,7 +171,7 @@ fn walk_tree(root: &Path, ignore: &GlobSet) -> BTreeMap<String, Entry> {
         }
         let ft = entry.file_type();
         if is_reparse_point(&entry) {
-            continue; // symlinks + jonctions Windows ignorés
+            continue;
         }
         let rel = match path.strip_prefix(root) {
             Ok(r) => r.to_string_lossy().replace('\\', "/"),
@@ -241,10 +222,6 @@ fn detect_changed(src: &Entry, dst: &Entry, settings: &Settings) -> (bool, Strin
     }
     (false, String::new())
 }
-
-// ----------------------------------------------------------------------------
-// Construction du plan
-// ----------------------------------------------------------------------------
 
 fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> {
     let source = PathBuf::from(&pair.source);
@@ -297,7 +274,6 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
             }
             Some(de) => {
                 if se.is_dir && de.is_dir {
-                    // identique, rien à faire
                 } else if !se.is_dir && !de.is_dir {
                     let (changed, reason) = detect_changed(se, de, settings);
                     if changed {
@@ -312,7 +288,6 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
                         });
                     }
                 } else {
-                    // conflit de type (fichier <-> dossier) : supprimer côté dest puis recréer
                     deletes.push(DeleteOp {
                         rel: de.rel.clone(),
                         abs: de.abs.clone(),
@@ -336,7 +311,6 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
         }
     }
 
-    // extras = présents dans dest, absents de src
     let mut extras: Vec<&Entry> = dest_map
         .iter()
         .filter(|(k, _)| !src_map.contains_key(*k))
@@ -344,7 +318,6 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
         .collect();
     let extra_entries = extras.len();
 
-    // racines de suppression (parent avant enfant => le parent couvre le sous-arbre)
     extras.sort_by(|a, b| a.rel.cmp(&b.rel));
     let mut last_root: Option<String> = None;
     for e in extras {
@@ -363,7 +336,6 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
         last_root = Some(e.rel.clone());
     }
 
-    // tri : dossiers à créer du moins profond au plus profond
     create_dirs.sort_by_key(|(rel, _)| rel.matches('/').count());
 
     let delete_pct = if dest_total > 0 {
@@ -423,15 +395,10 @@ fn plan_to_dto(plan: &ExecPlan) -> SyncPlan {
     }
 }
 
-/// Dry-run : calcule le plan sans rien écrire.
 pub fn dry_run(pair: &SyncPair, settings: &Settings) -> Result<SyncPlan, String> {
     let plan = build_plan(pair, settings)?;
     Ok(plan_to_dto(&plan))
 }
-
-// ----------------------------------------------------------------------------
-// Exécution
-// ----------------------------------------------------------------------------
 
 fn unique_tmp(dst: &Path) -> PathBuf {
     let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -443,13 +410,11 @@ fn unique_tmp(dst: &Path) -> PathBuf {
     }
 }
 
-/// Préfixe `\\?\` (verbatim) sur Windows : gère chemins longs et noms finissant
-/// par `.` ou espace (que les API Win32 normalisent sinon). Identité sur Linux.
 #[cfg(windows)]
 fn verbatim(p: &Path) -> PathBuf {
     let s = p.to_string_lossy().replace('/', "\\");
     if s.starts_with("\\\\") {
-        PathBuf::from(s) // déjà \\?\ ou UNC
+        PathBuf::from(s)
     } else {
         PathBuf::from(format!("\\\\?\\{}", s))
     }
@@ -523,8 +488,6 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
     );
 
     let mut done = 0usize;
-    // ~50 updates quelle que soit la taille : assez fréquent pour un ETA même
-    // sur les petites passes (sinon `done` reste à 0 et le front ne peut rien estimer).
     let step = (total / 50).max(1);
     let emit_progress = |app: &AppHandle, done: usize| {
         let _ = app.emit(
@@ -533,7 +496,6 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
         );
     };
 
-    // 1. créer les dossiers manquants (du moins profond au plus profond)
     for (rel, abs) in &plan.create_dirs {
         if let Err(e) = std::fs::create_dir_all(abs) {
             out.errors += 1;
@@ -545,7 +507,6 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
         }
     }
 
-    // 2. copier + écraser (avec un retry court)
     for c in &plan.copies {
         let mut res = copy_file_atomic(&c.src_abs, &c.dst_abs);
         if res.is_err() {
@@ -564,8 +525,6 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
             }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::NotFound || !c.src_abs.exists() {
-                    // Source disparue / inaccessible (jonction, OneDrive online-only,
-                    // supprimée entre-temps) : on ignore sans marquer la passe en erreur.
                     log(app, &pair.id, "warn", "skip", Some(c.rel.clone()), "ignoré (source introuvable)".into());
                 } else {
                     out.errors += 1;
@@ -579,7 +538,6 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
         }
     }
 
-    // 3. suppressions (racines) — retenues si le seuil de sécurité est dépassé
     if plan.aborted_safety {
         log(
             app,
@@ -622,7 +580,6 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
     out
 }
 
-/// Synchronisation complète d'une paire (utilisée par le scheduler / sync now).
 pub fn run_sync(app: &AppHandle, pair: SyncPair, settings: Settings) {
     let state = app.state::<AppState>();
     state.set_status(&pair.id, "syncing");

@@ -1,7 +1,5 @@
 <script lang="ts">
   import Select from "./Select.svelte";
-  // Sélecteur d'intervalle : valeur + unité (secondes / minutes / heures / jours).
-  // `seconds` est la valeur liée (en secondes). null = « défaut » (si allowDefault).
   let {
     seconds = $bindable<number | null>(null),
     allowDefault = false,

@@ -1,4 +1,3 @@
-//! Commandes Tauri exposées au frontend.
 
 use crate::config::{self, Settings, SyncPair};
 use crate::state::{AppState, LogEntry, SyncRequest};
@@ -7,7 +6,6 @@ use serde::Deserialize;
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-// ---- helpers ---------------------------------------------------------------
 
 fn persist(app: &AppHandle, state: &AppState) -> Result<(), String> {
     let snapshot = state.config.lock().unwrap().clone();
@@ -37,15 +35,12 @@ fn send_request(state: &AppState, req: SyncRequest) -> Result<(), String> {
     }
 }
 
-/// Utilisé par le menu du tray.
 pub fn trigger_all(app: &AppHandle) {
     let state = app.state::<AppState>();
     let _ = send_request(&state, SyncRequest::All);
 }
 
-// ---- état global -----------------------------------------------------------
 
-/// Intervalle minimum (doit rester aligné avec scheduler::MIN_INTERVAL).
 const MIN_INTERVAL: u64 = 5;
 
 #[tauri::command]
@@ -64,8 +59,6 @@ pub fn get_app_state(state: State<AppState>) -> serde_json::Value {
             } else {
                 statuses.get(&p.id).cloned().unwrap_or_else(|| "idle".into())
             };
-            // Secondes avant la prochaine synchro auto (null si paire désactivée
-            // ou planificateur en pause).
             let next_run_sec: Option<u64> = if p.enabled && scheduler_running {
                 let iv = match p.interval_sec_override {
                     Some(v) if v >= MIN_INTERVAL => v,
@@ -101,7 +94,6 @@ pub fn get_app_state(state: State<AppState>) -> serde_json::Value {
     })
 }
 
-// ---- réglages --------------------------------------------------------------
 
 #[tauri::command]
 pub fn get_settings(state: State<AppState>) -> Settings {
@@ -135,7 +127,6 @@ pub fn set_scheduler_running(app: AppHandle, state: State<AppState>, running: bo
     Ok(())
 }
 
-// ---- paires ----------------------------------------------------------------
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -241,7 +232,6 @@ pub fn set_pair_enabled(app: AppHandle, state: State<AppState>, id: String, enab
     Ok(())
 }
 
-// ---- synchronisation -------------------------------------------------------
 
 #[tauri::command]
 pub fn sync_now(state: State<AppState>, id: String) -> Result<(), String> {
@@ -270,7 +260,6 @@ pub async fn dry_run(state: State<'_, AppState>, id: String) -> Result<SyncPlan,
         .map_err(|e| e.to_string())?
 }
 
-// ---- logs ------------------------------------------------------------------
 
 #[tauri::command]
 pub fn get_logs(state: State<AppState>) -> Vec<LogEntry> {
@@ -282,7 +271,6 @@ pub fn clear_logs(state: State<AppState>) {
     state.logs.lock().unwrap().clear();
 }
 
-// ---- fenêtre ---------------------------------------------------------------
 
 #[tauri::command]
 pub fn show_window(app: AppHandle) {

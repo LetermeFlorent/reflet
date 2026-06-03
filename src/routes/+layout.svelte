@@ -129,7 +129,6 @@
     font-weight: 600;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.07);
   }
-  /* barre d'accent (couleur système) collée à droite de l'onglet actif */
   .navitem.active::after {
     content: "";
     position: absolute;

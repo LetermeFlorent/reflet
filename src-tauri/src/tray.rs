@@ -1,5 +1,3 @@
-//! Icône et menu de la barre système (system tray).
-
 use std::sync::atomic::Ordering;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};

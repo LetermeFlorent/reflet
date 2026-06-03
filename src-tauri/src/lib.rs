@@ -46,17 +46,14 @@ pub fn run() {
             let cfg = config::load(&handle);
             app.manage(AppState::new(cfg));
 
-            // Worker de synchronisation
             let tx = scheduler::start(handle.clone());
             {
                 let state = handle.state::<AppState>();
                 *state.sync_tx.lock().unwrap() = Some(tx);
             }
 
-            // Tray
             tray::build(&handle)?;
 
-            // Aligner l'autostart OS avec le réglage
             let enable_autostart = handle
                 .state::<AppState>()
                 .config
@@ -66,7 +63,6 @@ pub fn run() {
                 .autostart;
             commands::apply_autostart(&handle, enable_autostart);
 
-            // Démarrage minimisé si lancé via autostart
             let autostarted = std::env::args().any(|a| a == "--autostart");
             let start_min = handle
                 .state::<AppState>()

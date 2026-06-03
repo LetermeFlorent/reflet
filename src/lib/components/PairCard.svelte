@@ -21,7 +21,6 @@
   );
   const indeterminate = $derived(isSyncing && (!store.progress || store.progress.total === 0));
 
-  // ETA calculé côté client : pas de timing dans l'event sync:progress.
   let etaSec = $state<number | null>(null);
   let startAt = 0;
 
@@ -43,7 +42,7 @@
         etaSec = null;
         return;
       }
-      const rate = p.done / elapsed; // fichiers/s
+      const rate = p.done / elapsed;
       etaSec = Math.max(0, Math.round((p.total - p.done) / rate));
     };
     tick();
@@ -58,9 +57,6 @@
     return ss ? `${m} min ${ss} s` : `${m} min`;
   }
 
-  // Compte à rebours avant la prochaine synchro auto. Le backend donne un instantané
-  // (nextRunSec) ; on fige une cible locale et on décrémente chaque seconde. Chaque
-  // refresh du store (state:changed) ré-aligne la cible.
   let nextSec = $state<number | null>(null);
 
   $effect(() => {
@@ -188,9 +184,8 @@
   .sync-btn {
     position: relative;
     overflow: hidden;
-    min-width: 112px; /* taille fixe : ne change pas entre "Synchroniser" et "42%" */
+    min-width: 112px;
   }
-  /* bouton neutre (plat comme « Aperçu ») : on signale l'activité par la bordure/texte accent */
   .sync-btn.syncing {
     border-color: var(--accent);
     color: var(--accent);
@@ -201,7 +196,6 @@
     top: 0;
     bottom: 0;
     width: 0;
-    /* fond neutre → teinte accent pour que la barre reste visible */
     background: color-mix(in srgb, var(--accent) 22%, transparent);
     transition: width 0.25s var(--ease);
   }

@@ -1,4 +1,3 @@
-//! Initialisation du journal d'audit (tracing) vers un fichier roulant quotidien.
 
 use tauri::{AppHandle, Manager};
 
@@ -11,7 +10,6 @@ pub fn init(app: &AppHandle) {
 
     let file_appender = tracing_appender::rolling::daily(dir, "reflet.log");
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
-    // Le guard doit vivre toute la durée du process pour que les logs soient flushés.
     Box::leak(Box::new(guard));
 
     let _ = tracing_subscriber::fmt()

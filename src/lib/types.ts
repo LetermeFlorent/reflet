@@ -18,8 +18,8 @@ export interface SyncPair {
   notifyApp: boolean;
   ignorePatterns: string[];
   lastRun?: LastRun | null;
-  status: string; // idle | syncing | error | disabled
-  nextRunSec?: number | null; // secondes avant la prochaine synchro auto (null si off/pause)
+  status: string;
+  nextRunSec?: number | null;
 }
 
 export interface NewPair {

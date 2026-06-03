@@ -1,5 +1,4 @@
 <script lang="ts">
-  // Select custom : bouton + liste déroulante stylée. Taille alignée sur les boutons.
   let {
     value = $bindable<string>(""),
     options,

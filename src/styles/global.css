@@ -9,8 +9,8 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  overflow: hidden; /* pas de scroll global */
-  overscroll-behavior: none; /* pas de rebond élastique */
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -23,7 +23,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* zones scrollables : pas de chaînage ni de rebond hors limites */
 .page-scroll,
 .dash-scroll {
   overscroll-behavior: contain;
@@ -75,7 +74,6 @@ select {
   background-clip: padding-box;
 }
 
-/* ---- boutons ---- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -133,7 +131,6 @@ select {
   padding: 0;
 }
 
-/* ---- cartes ---- */
 .card {
   background: var(--bg-elev);
   border: 1px solid var(--hairline);
@@ -142,7 +139,6 @@ select {
   transition: box-shadow 0.18s var(--ease), transform 0.18s var(--ease);
 }
 
-/* ---- champs ---- */
 .field {
   display: flex;
   flex-direction: column;
@@ -178,7 +174,6 @@ textarea.input {
   font-family: var(--font);
 }
 
-/* ---- toggle switch ---- */
 .switch {
   position: relative;
   display: inline-block;
@@ -218,7 +213,6 @@ textarea.input {
   transform: translateX(14px);
 }
 
-/* ---- badge / pastille statut ---- */
 .badge {
   display: inline-flex;
   align-items: center;
@@ -234,7 +228,6 @@ textarea.input {
   background: var(--gray);
 }
 
-/* ---- modal ---- */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -258,7 +251,6 @@ textarea.input {
   animation: modalPop 0.22s var(--ease);
 }
 
-/* ---- animations globales ---- */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -299,7 +291,6 @@ textarea.input {
   flex: 1;
 }
 
-/* page entière scrollable (Réglages, Journal) */
 .page-scroll {
   height: 100%;
   overflow-y: auto;

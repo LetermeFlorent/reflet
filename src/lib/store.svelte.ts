@@ -13,9 +13,6 @@ export interface Progress {
   total: number;
 }
 
-/** Égalité de valeur à 1 niveau (primitifs, tableaux, objets plats) — pour éviter
- *  de réassigner des champs imbriqués (lastRun, ignorePatterns) identiques en valeur
- *  mais neufs en référence (nouveau JSON à chaque fetch IPC). */
 function shallowEq(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a == null || b == null) return false;
@@ -53,19 +50,11 @@ class Store {
     this.loaded = true;
   }
 
-  /**
-   * Fusionne les paires entrantes dans le tableau réactif au lieu de tout
-   * remplacer : on mute les champs des objets existants (par id). Grâce à la
-   * réactivité fine de Svelte 5, seuls les champs réellement modifiés déclenchent
-   * une mise à jour DOM — pas la carte entière, et les cartes inchangées ne bougent pas.
-   * On ne réassigne le tableau que si la composition change (ajout/suppr/ordre).
-   */
   private mergePairs(incoming: SyncPair[]) {
     const byId = new Map(this.pairs.map((p) => [p.id, p]));
     const merged = incoming.map((np) => {
       const existing = byId.get(np.id);
       if (!existing) return np;
-      // Mutation ciblée : Svelte n'émet que pour les valeurs qui changent vraiment.
       const ex = existing as unknown as Record<string, unknown>;
       const src = np as unknown as Record<string, unknown>;
       for (const k of Object.keys(np)) {
@@ -121,7 +110,6 @@ class Store {
       await listen<any>("sync:finished", (e) => {
         const p = e.payload;
         this.progress = null;
-        // Toast seulement si la paire a les notifs activées (sinon spam silencieux).
         const pair = this.pairs.find((x) => x.id === p.pairId);
         if (this.settings?.notifyApp && pair?.notifyApp) {
           if (p.status === "ok") {

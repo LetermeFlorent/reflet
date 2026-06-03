@@ -1,4 +1,3 @@
-//! État applicatif partagé (config, logs en mémoire, statuts runtime, canal sync).
 
 use crate::config::Config;
 use serde::Serialize;
@@ -14,32 +13,27 @@ pub const MAX_LOGS: usize = 3000;
 #[serde(rename_all = "camelCase")]
 pub struct LogEntry {
     pub at: String,
-    pub level: String,           // info | warn | error
-    pub pair_id: Option<String>, // paire concernée
-    pub action: String,          // copy | update | delete | skip | error | info
+    pub level: String,
+    pub pair_id: Option<String>,
+    pub action: String,
     pub path: Option<String>,
     pub message: String,
 }
 
-/// Requête envoyée au worker de synchronisation.
 #[derive(Debug, Clone)]
 pub enum SyncRequest {
-    /// Synchroniser une paire précise immédiatement.
     Pair(String),
-    /// Synchroniser toutes les paires actives immédiatement.
     All,
 }
 
 pub struct AppState {
     pub config: Mutex<Config>,
     pub logs: Mutex<VecDeque<LogEntry>>,
-    /// pair_id -> statut courant (idle | syncing | error | disabled)
     pub statuses: Mutex<HashMap<String, String>>,
     pub scheduler_running: AtomicBool,
     pub really_quit: AtomicBool,
     pub sync_busy: AtomicBool,
     pub sync_tx: Mutex<Option<Sender<SyncRequest>>>,
-    /// pair_id -> instant du dernier déclenchement (pour l'intervalle par paire).
     pub last_started: Mutex<HashMap<String, Instant>>,
 }
 

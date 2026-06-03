@@ -1,5 +1,3 @@
-//! Modèle de configuration persisté + chargement/sauvegarde JSON.
-
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -12,7 +10,7 @@ fn default_true() -> bool {
 #[serde(rename_all = "camelCase")]
 pub struct LastRun {
     pub at: String,
-    pub status: String, // ok | error
+    pub status: String,
     pub copied: u64,
     pub updated: u64,
     pub deleted: u64,
@@ -28,13 +26,10 @@ pub struct SyncPair {
     pub destination: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// Intervalle propre à la paire (secondes). None/0 => hérite de l'intervalle global.
     #[serde(default)]
     pub interval_sec_override: Option<u64>,
-    /// Notif système PC pour cette paire (le maître global doit aussi être ON).
     #[serde(default = "default_true")]
     pub notify_pc: bool,
-    /// Notif in-app / toasts pour cette paire (le maître global doit aussi être ON).
     #[serde(default = "default_true")]
     pub notify_app: bool,
     #[serde(default)]
@@ -47,19 +42,17 @@ pub struct SyncPair {
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub interval_sec: u64,
-    pub delete_behavior: String, // trash | permanent
+    pub delete_behavior: String,
     pub autostart: bool,
     pub start_minimized: bool,
     pub confirm_deletes_with_dry_run: bool,
     pub ignore_patterns: Vec<String>,
-    pub verify_by_content: String, // off | blake3
+    pub verify_by_content: String,
     pub mtime_tolerance_sec: i64,
     pub delete_safety_threshold_pct: u32,
     pub scheduler_running: bool,
-    /// Interrupteur maître notifications système PC (défaut off).
     #[serde(default)]
     pub notify_pc: bool,
-    /// Interrupteur maître notifications in-app / toasts (défaut off).
     #[serde(default)]
     pub notify_app: bool,
 }

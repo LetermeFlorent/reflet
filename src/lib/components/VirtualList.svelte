@@ -1,8 +1,6 @@
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
 
-  // Liste virtualisée : ne rend que les éléments visibles (+ overscan).
-  // itemHeight = hauteur fixe d'une ligne en px.
   let {
     items,
     itemHeight,

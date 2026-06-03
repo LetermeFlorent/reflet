@@ -21,7 +21,6 @@
   let notifyPc = $state(pair?.notifyPc ?? true);
   let notifyApp = $state(pair?.notifyApp ?? true);
   let ignoreText = $state((pair?.ignorePatterns ?? []).join("\n"));
-  // Intervalle propre à la paire (secondes) ; null = défaut global.
   let intervalSec = $state<number | null>(pair?.intervalSecOverride ?? null);
   let saving = $state(false);
 

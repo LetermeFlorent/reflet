@@ -19,7 +19,6 @@
   let local = $state<Settings | null>(null);
   let saving = $state(false);
 
-  // Initialise une copie éditable dès que les réglages sont chargés.
   $effect(() => {
     if (store.settings && !local) {
       local = JSON.parse(JSON.stringify(store.settings)) as Settings;

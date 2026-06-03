@@ -1,9 +1,3 @@
-//! Worker de synchronisation unique : minuteur PAR PAIRE + requêtes « sync now ».
-//!
-//! Un seul worker traite une requête à la fois => aucun chevauchement de passes.
-//! Chaque paire a son propre intervalle (interval_sec_override), sinon hérite de
-//! l'intervalle global des réglages.
-
 use crate::config::{Settings, SyncPair};
 use crate::state::{AppState, SyncRequest};
 use std::sync::atomic::Ordering;
@@ -18,7 +12,6 @@ const MIN_SLEEP: u64 = 3;
 pub fn start(app: AppHandle) -> Sender<SyncRequest> {
     let (tx, mut rx) = channel::<SyncRequest>(16);
     spawn(async move {
-        // Initialise les timers des paires existantes (=> 1er run auto après leur intervalle).
         {
             let state = app.state::<AppState>();
             let cfg = state.config.lock().unwrap();
@@ -68,7 +61,6 @@ fn set_busy(app: &AppHandle, busy: bool) {
     let _ = app.emit("sync:busy", serde_json::json!({ "busy": busy }));
 }
 
-/// Temps à dormir avant la prochaine paire due.
 fn compute_sleep(app: &AppHandle) -> Duration {
     let settings = current_settings(app);
     let now = Instant::now();
@@ -88,7 +80,6 @@ fn compute_sleep(app: &AppHandle) -> Duration {
     Duration::from_secs(min_remaining.clamp(MIN_SLEEP, MAX_SLEEP))
 }
 
-/// Lance les paires dont l'intervalle est écoulé.
 async fn run_due(app: &AppHandle) {
     let settings = current_settings(app);
     let now = Instant::now();
@@ -104,7 +95,6 @@ async fn run_due(app: &AppHandle) {
                 match last.get(&p.id) {
                     Some(t) => now.duration_since(*t).as_secs() >= iv,
                     None => {
-                        // Nouvelle paire : initialise, pas due tout de suite.
                         last.insert(p.id.clone(), now);
                         false
                     }
