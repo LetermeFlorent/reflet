@@ -84,7 +84,7 @@
 <style>
   .app {
     display: grid;
-    grid-template-columns: 216px 1fr;
+    grid-template-columns: max-content 1fr;
     height: 100vh;
     overflow: hidden;
     background: var(--bg);
