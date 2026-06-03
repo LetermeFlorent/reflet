@@ -37,6 +37,12 @@ export const api = {
     if (!r) return [];
     return Array.isArray(r) ? r : [r];
   },
+
+  pickFolders: async (): Promise<string[]> => {
+    const r = await open({ directory: true, multiple: true });
+    if (!r) return [];
+    return Array.isArray(r) ? r : [r];
+  },
 };
 
 export { listen };

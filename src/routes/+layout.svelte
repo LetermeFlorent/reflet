@@ -6,6 +6,7 @@
   import { store } from "$lib/store.svelte";
   import { api } from "$lib/ipc";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
+  import Loader from "$lib/components/Loader.svelte";
 
   let { children } = $props();
 
@@ -43,6 +44,10 @@
     { href: "/logs", label: "Journal", icon: "≣" },
   ];
 </script>
+
+{#if !store.loaded}
+  <Loader />
+{/if}
 
 <div class="app">
   <aside class="side">

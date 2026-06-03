@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from "$lib/ipc";
   import { store } from "$lib/store.svelte";
+  import ChipsInput from "./ChipsInput.svelte";
 
   let {
     initial = "",
@@ -11,49 +12,37 @@
   type Mode = "folder" | "files" | "manual";
   let mode = $state<Mode>(initial ? "manual" : "folder");
 
-  let folderName = $state("");
+  let folders = $state<string[]>([]);
   let recursive = $state(true);
-  const folderPattern = $derived.by(() => {
-    const n = folderName.trim().replace(/[\\/]+$/, "");
-    if (!n) return "";
-    return recursive ? `**/${n}/**` : `${n}/**`;
-  });
-
   let files = $state<string[]>([]);
-  let fileName = $state("");
-
   let manual = $state(initial);
 
   function base(p: string): string {
     return p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? p;
   }
-
-  async function browseFolder() {
+  function merge(into: string[], names: string[]) {
+    for (const n of names) {
+      const b = base(n);
+      if (b && !into.includes(b)) into.push(b);
+    }
+  }
+  async function browseFolders() {
     try {
-      const d = await api.pickFolder();
-      if (d) folderName = base(d);
+      merge(folders, await api.pickFolders());
     } catch (e) {
       store.toast("error", String(e));
     }
   }
   async function browseFiles() {
     try {
-      for (const f of await api.pickFiles()) {
-        const b = base(f);
-        if (b && !files.includes(b)) files.push(b);
-      }
+      merge(files, await api.pickFiles());
     } catch (e) {
       store.toast("error", String(e));
     }
   }
-  function addFileName() {
-    const b = fileName.trim();
-    if (b && !files.includes(b)) files.push(b);
-    fileName = "";
-  }
 
   const result = $derived.by(() => {
-    if (mode === "folder") return folderPattern ? [folderPattern] : [];
+    if (mode === "folder") return folders.map((f) => (recursive ? `**/${f}/**` : `${f}/**`));
     if (mode === "files") return files.map((f) => `**/${f}`);
     return manual
       .split("\n")
@@ -70,44 +59,31 @@
 
 <div class="modal-backdrop" onclick={onClose} role="presentation">
   <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-    <h1>{initial ? "Modifier l'exclusion" : "Ajouter une exclusion"}</h1>
+    <h1>{initial ? "Modifier l'exclusion" : "Ajouter des exclusions"}</h1>
 
     <div class="tabs">
-      <button class="tab" class:on={mode === "folder"} onclick={() => (mode = "folder")}>Dossier</button>
+      <button class="tab" class:on={mode === "folder"} onclick={() => (mode = "folder")}>Dossiers</button>
       <button class="tab" class:on={mode === "files"} onclick={() => (mode = "files")}>Fichiers</button>
       <button class="tab" class:on={mode === "manual"} onclick={() => (mode = "manual")}>Manuel (glob)</button>
     </div>
 
     {#if mode === "folder"}
-      <div class="field">
-        <span class="label">Nom du dossier à exclure</span>
-        <div class="row">
-          <input class="input" bind:value={folderName} placeholder="ex. node_modules" />
-          <button class="btn" onclick={browseFolder}>Parcourir…</button>
-        </div>
-      </div>
+      <ChipsInput
+        label="Dossiers à exclure (par nom) — plusieurs possibles"
+        placeholder="ex. node_modules"
+        bind:items={folders}
+        browseLabel="Sélectionner…"
+        onBrowse={browseFolders}
+      />
       <label class="chk"><input type="checkbox" bind:checked={recursive} /> À n'importe quel niveau (récursif)</label>
     {:else if mode === "files"}
-      <div class="field">
-        <span class="label">Fichiers à exclure (par nom)</span>
-        <div class="row">
-          <input
-            class="input"
-            bind:value={fileName}
-            placeholder="ex. secret.txt"
-            onkeydown={(e) => e.key === "Enter" && addFileName()}
-          />
-          <button class="btn" onclick={addFileName}>Ajouter</button>
-          <button class="btn" onclick={browseFiles}>Sélectionner…</button>
-        </div>
-      </div>
-      {#if files.length}
-        <div class="chips">
-          {#each files as f, i (f)}
-            <span class="chip">{f}<button class="x" onclick={() => files.splice(i, 1)} aria-label="retirer">×</button></span>
-          {/each}
-        </div>
-      {/if}
+      <ChipsInput
+        label="Fichiers à exclure (par nom) — plusieurs possibles"
+        placeholder="ex. secret.txt"
+        bind:items={files}
+        browseLabel="Sélectionner…"
+        onBrowse={browseFiles}
+      />
     {:else}
       <div class="field">
         <span class="label">Motifs glob (un par ligne)</span>
@@ -126,7 +102,7 @@
       <div class="spacer"></div>
       <button class="btn" onclick={onClose}>Annuler</button>
       <button class="btn" onclick={submit} disabled={result.length === 0}>
-        {initial ? "Enregistrer" : "Ajouter"}
+        {initial ? "Enregistrer" : `Ajouter${result.length > 1 ? ` (${result.length})` : ""}`}
       </button>
     </div>
   </div>
@@ -165,31 +141,6 @@
     font-size: 13px;
     margin-top: var(--s2);
     cursor: pointer;
-  }
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: var(--s3);
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--hover);
-    border-radius: var(--r-control);
-    padding: 3px 4px 3px 10px;
-    font-size: 12px;
-    font-family: ui-monospace, Menlo, Consolas, monospace;
-  }
-  .chip .x {
-    border: none;
-    background: none;
-    cursor: pointer;
-    color: var(--text-2);
-    font-size: 15px;
-    line-height: 1;
-    padding: 0 4px;
   }
   .preview {
     margin-top: var(--s4);

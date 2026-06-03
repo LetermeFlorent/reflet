@@ -4,6 +4,7 @@
   import { store } from "$lib/store.svelte";
   import Switch from "./Switch.svelte";
   import IntervalPicker from "./IntervalPicker.svelte";
+  import ExclusionsManager from "./ExclusionsManager.svelte";
   import { formatInterval } from "$lib/format";
 
   let {
@@ -20,9 +21,19 @@
   let enabled = $state(pair?.enabled ?? true);
   let notifyPc = $state(pair?.notifyPc ?? true);
   let notifyApp = $state(pair?.notifyApp ?? true);
-  let ignoreText = $state((pair?.ignorePatterns ?? []).join("\n"));
+  let ignoreList = $state<string[]>([...(pair?.ignorePatterns ?? [])]);
   let intervalSec = $state<number | null>(pair?.intervalSecOverride ?? null);
   let saving = $state(false);
+
+  function excAdd(ps: string[]) {
+    for (const p of ps) if (!ignoreList.includes(p)) ignoreList.push(p);
+  }
+  function excReplace(i: number, ps: string[]) {
+    ignoreList.splice(i, 1, ...ps);
+  }
+  function excRemove(i: number) {
+    ignoreList.splice(i, 1);
+  }
 
   const globalLabel = $derived(
     store.settings ? formatInterval(store.settings.intervalSec) : "15 min",
@@ -55,10 +66,7 @@
   async function save() {
     if (!canSave) return;
     saving = true;
-    const ignorePatterns = ignoreText
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    const ignorePatterns = $state.snapshot(ignoreList);
     const intervalSecOverride = intervalSec;
     try {
       if (isEdit && pair) {
@@ -141,8 +149,13 @@
       </div>
 
       <div class="field">
-        <span class="label">Exclusions (un motif glob par ligne)</span>
-        <textarea class="input" rows="3" bind:value={ignoreText} placeholder="**/*.tmp&#10;**/node_modules/**"></textarea>
+        <span class="label">Exclusions propres à cette paire (en plus des exclusions globales)</span>
+        <ExclusionsManager
+          patterns={ignoreList}
+          onAdd={excAdd}
+          onReplace={excReplace}
+          onRemove={excRemove}
+        />
       </div>
 
       <div class="row toggles">
