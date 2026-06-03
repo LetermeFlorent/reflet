@@ -39,3 +39,7 @@ Modifications de la journee (quoi + pourquoi) :
 - **Bump de version 1.1.0** — `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`. _Pourquoi : nouvelle version livrable (popups in-app, mode compact, onglet Exclusions)._ Release v1.1.0 publiee sur GitHub avec installeur.
 
 - **Exclusions : multi-selection + loader + gestion par paire** — (1) la popup d'ajout permet de selectionner PLUSIEURS dossiers/fichiers a la fois (sous-composant reutilisable `ChipsInput`). (2) Ecran de demarrage : composant `Loader.svelte` (barre rectangle arrondie centree, indeterminee) affiche tant que l'etat n'est pas charge + fond pose dans `app.html` pour supprimer le flash blanc. (3) Gestion des exclusions PAR PAIRE : la modale « Modifier la paire » remplace le textarea par le composant reutilisable `ExclusionsManager` (meme tableau + popup que le global). Deux portees cumulees : globales (onglet) + propres a la paire (deja fusionnees backend dans `sync.rs`). _Pourquoi : demandes utilisateur ; choix d'une liste par paire plutot qu'un systeme d'attribution (plus simple, zero migration, composants reutilises)._
+
+- **Sidebar a largeur adaptative** — la barre laterale gauche prend la largeur de son item le plus long (`grid-template-columns: max-content 1fr`) au lieu de 216px fixe. _Pourquoi : demande utilisateur._
+
+- **Bump de version 1.2.0** — `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`. _Pourquoi : release regroupant multi-selection des exclusions, loader de demarrage, exclusions par paire et sidebar adaptative._
