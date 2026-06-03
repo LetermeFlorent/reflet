@@ -1,0 +1,65 @@
+/* Design tokens. Thème clair/sombre AUTO (prefers-color-scheme) + accent piqué
+   à la couleur d'accentuation du système (AccentColor). Pas d'ombres sur cartes. */
+
+:root {
+  /* espacement */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+
+  /* rayons */
+  --r-control: 6px;
+  --r-card: 10px;
+  --r-modal: 14px;
+
+  /* typographie */
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Inter, Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+
+  /* accent = couleur du système */
+  --accent: AccentColor;
+  --accent-press: AccentColor;
+  --accent-text: AccentColorText;
+
+  /* couleurs — clair (proche Windows 11) */
+  --bg: #f3f3f3;
+  --bg-elev: #fbfbfb;
+  --bg-sunken: #eaeaea;
+  --text: #1a1a1a;
+  --text-2: #5e5e5e;
+  --border: rgba(0, 0, 0, 0.12);
+  --hairline: rgba(0, 0, 0, 0.09);
+  --hover: rgba(0, 0, 0, 0.05);
+  --shadow-card: none;
+  --shadow-modal: 0 8px 30px rgba(0, 0, 0, 0.18);
+
+  --green: #2eae4e;
+  --red: #e5484d;
+  --orange: #f5a623;
+  --gray: #8a8a8a;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #202020;
+    --bg-elev: #2b2b2b;
+    --bg-sunken: #1a1a1a;
+    --text: #f2f2f2;
+    --text-2: #a0a0a0;
+    --border: rgba(255, 255, 255, 0.14);
+    --hairline: rgba(255, 255, 255, 0.09);
+    --hover: rgba(255, 255, 255, 0.06);
+    --shadow-card: none;
+    --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.6);
+
+    --green: #30d158;
+    --red: #ff5a5f;
+    --orange: #ff9f0a;
+    --gray: #8a8a8a;
+  }
+}
