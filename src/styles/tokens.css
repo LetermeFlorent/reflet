@@ -34,6 +34,15 @@
   --orange: #f5a623;
   --gray: #8a8a8a;
 
+  --color-bleu-bg: #e8f0fe;
+  --color-vert-bg: #e6f4ea;
+  --color-orange-bg: #fef3e0;
+  --color-rose-bg: #fce8e6;
+  --color-violet-bg: #f0e6f6;
+  --color-teal-bg: #e0f2f1;
+  --color-jaune-bg: #fef7e0;
+  --color-rouge-bg: #fce8e8;
+
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -54,5 +63,14 @@
     --red: #ff5a5f;
     --orange: #ff9f0a;
     --gray: #8a8a8a;
+
+    --color-bleu-bg: #1a2d3d;
+    --color-vert-bg: #1a3d2a;
+    --color-orange-bg: #3d2e1a;
+    --color-rose-bg: #3d1a2a;
+    --color-violet-bg: #2a1a3d;
+    --color-teal-bg: #1a3d3d;
+    --color-jaune-bg: #3d351a;
+    --color-rouge-bg: #3d1a1a;
   }
 }

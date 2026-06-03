@@ -1,4 +1,5 @@
 mod commands;
+mod compression;
 mod config;
 mod lifecycle;
 mod logging;
@@ -108,7 +109,8 @@ pub fn run() {
             commands::clear_logs,
             commands::show_window,
             commands::hide_window,
-            commands::quit_app
+            commands::quit_app,
+            commands::detect_compression_methods
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

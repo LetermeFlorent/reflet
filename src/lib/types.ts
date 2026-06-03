@@ -21,6 +21,8 @@ export interface SyncPair {
   scheduleTimes: string[];
   minFileSize: number;
   maxFileSize: number;
+  color: string;
+  compression: CompressionConfig;
   lastRun?: LastRun | null;
   status: string;
   nextRunSec?: number | null;
@@ -39,6 +41,8 @@ export interface NewPair {
   scheduleTimes: string[];
   minFileSize: number;
   maxFileSize: number;
+  color: string;
+  compression: CompressionConfig;
 }
 
 export interface Settings {
@@ -79,6 +83,23 @@ export interface SyncPlan {
   totalBytes: number;
   deletePct: number;
   abortedSafety: boolean;
+}
+
+export interface CompressionMethod {
+  id: string;
+  name: string;
+  extension: string;
+  available: boolean;
+  supportsPassword: boolean;
+  downloadUrl: string;
+  defaultLevel: number;
+  maxLevel: number;
+}
+
+export interface CompressionConfig {
+  method: string;
+  level: number;
+  password: string | null;
 }
 
 export interface LogEntry {

@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import type { AppStateDto, LogEntry, NewPair, Settings, SyncPair, SyncPlan } from "./types";
+import type { AppStateDto, CompressionMethod, LogEntry, NewPair, Settings, SyncPair, SyncPlan } from "./types";
 
 export const api = {
   getAppState: () => invoke<AppStateDto>("get_app_state"),
@@ -26,6 +26,7 @@ export const api = {
 
   getLogs: () => invoke<LogEntry[]>("get_logs"),
   clearLogs: () => invoke<void>("clear_logs"),
+  detectCompressionMethods: () => invoke<CompressionMethod[]>("detect_compression_methods"),
 
   showWindow: () => invoke<void>("show_window"),
   hideWindow: () => invoke<void>("hide_window"),

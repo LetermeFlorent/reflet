@@ -1,8 +1,9 @@
 <script lang="ts">
-  import type { SyncPair } from "$lib/types";
+  import type { CompressionConfig, CompressionMethod, SyncPair } from "$lib/types";
   import { api } from "$lib/ipc";
   import { store } from "$lib/store.svelte";
   import Switch from "./Switch.svelte";
+  import Select from "./Select.svelte";
   import IntervalPicker from "./IntervalPicker.svelte";
   import ExclusionsManager from "./ExclusionsManager.svelte";
   import { formatInterval } from "$lib/format";
@@ -28,7 +29,63 @@
   let scheduleInput = $state("");
   let minFileSize = $state(pair?.minFileSize ?? 0);
   let maxFileSize = $state(pair?.maxFileSize ?? 0);
+  let cardColor = $state(pair?.color ?? "");
   let saving = $state(false);
+
+  // Compression
+  let compMethod = $state(pair?.compression?.method ?? "off");
+  let compLevel = $state(pair?.compression?.level ?? 0);
+  let compPassword = $state(pair?.compression?.password ?? "");
+  let availableMethods = $state<CompressionMethod[]>([]);
+
+  async function loadMethods() {
+    try {
+      availableMethods = await api.detectCompressionMethods();
+    } catch {
+      // silencieux
+    }
+  }
+  $effect(() => {
+    loadMethods();
+  });
+
+  const selectedMethodMeta = $derived(availableMethods.find(m => m.id === compMethod));
+  const compLevelMax = $derived(selectedMethodMeta?.maxLevel ?? 0);
+  const compLevelDefault = $derived(selectedMethodMeta?.defaultLevel ?? 0);
+  const compSupportsPassword = $derived(selectedMethodMeta?.supportsPassword ?? false);
+  const availMethods = $derived(availableMethods.filter(m => m.available));
+  const unavailMethods = $derived(availableMethods.filter(m => !m.available));
+  const compOptions = $derived([
+    { value: "off", label: "Aucune (copie brute)" },
+    ...availableMethods.map(m => ({
+      value: m.id,
+      label: `${m.name} (${m.extension})${m.available ? '' : ' — non installé'}`,
+      disabled: !m.available,
+    })),
+  ]);
+
+  // On method change, ensure level is valid
+  let prevCompMethod = $state(compMethod);
+  $effect(() => {
+    if (compMethod !== prevCompMethod) {
+      prevCompMethod = compMethod;
+      if (compMethod !== "off" && compLevelDefault > 0 && (compLevel === 0 || compLevel > compLevelMax)) {
+        compLevel = compLevelDefault;
+      }
+    }
+  });
+
+  const COLORS = [
+    { id: "", name: "Aucune" },
+    { id: "bleu", name: "Bleu" },
+    { id: "vert", name: "Vert" },
+    { id: "orange", name: "Orange" },
+    { id: "rose", name: "Rose" },
+    { id: "violet", name: "Violet" },
+    { id: "teal", name: "Teal" },
+    { id: "jaune", name: "Jaune" },
+    { id: "rouge", name: "Rouge" },
+  ];
 
   function excAdd(ps: string[]) {
     for (const p of ps) if (!ignoreList.includes(p)) ignoreList.push(p);
@@ -74,6 +131,11 @@
     const ignorePatterns = $state.snapshot(ignoreList);
     const intervalSecOverride = intervalSec;
     const times = $state.snapshot(scheduleTimes).filter(t => /^\d{2}:\d{2}$/.test(t));
+    const compression: CompressionConfig = {
+      method: compMethod,
+      level: compMethod === "off" ? 0 : (compLevel || compLevelDefault),
+      password: compSupportsPassword && compPassword ? compPassword : null,
+    };
     try {
       if (isEdit && pair) {
         await api.updatePair({
@@ -90,6 +152,8 @@
           scheduleTimes: times,
           minFileSize,
           maxFileSize,
+          color: cardColor,
+          compression,
         });
       } else {
         await api.addPair({
@@ -105,6 +169,8 @@
           scheduleTimes: times,
           minFileSize,
           maxFileSize,
+          color: cardColor,
+          compression,
         });
       }
       onSaved();
@@ -200,6 +266,53 @@
           onReplace={excReplace}
           onRemove={excRemove}
         />
+      </div>
+
+      <div class="field">
+        <span class="label">Compression</span>
+        <Select bind:value={compMethod} options={compOptions} />
+
+        {#if compMethod !== "off" && selectedMethodMeta}
+          {#if !selectedMethodMeta.available}
+            <div class="err" style="margin-top:4px;font-size:12px">
+              {selectedMethodMeta.name} n'est pas installé.
+              <a href={selectedMethodMeta.downloadUrl} target="_blank" rel="noopener noreferrer">Télécharger {selectedMethodMeta.name}</a>
+            </div>
+          {:else}
+            <div style="margin-bottom:6px">
+              <span class="label" style="font-size:12px">Niveau de compression ({compLevel}/{selectedMethodMeta.maxLevel})</span>
+              <input class="input" type="range" min="1" max={selectedMethodMeta.maxLevel} bind:value={compLevel} style="width:100%" />
+            </div>
+            {#if compSupportsPassword}
+              <div>
+                <span class="label" style="font-size:12px">Mot de passe (optionnel)</span>
+                <input class="input" type="password" bind:value={compPassword} placeholder="Laisser vide = pas de mot de passe" />
+              </div>
+            {/if}
+          {/if}
+        {/if}
+        {#if availableMethods.length === 0}
+          <div class="muted" style="font-size:12px">Chargement des méthodes disponibles…</div>
+        {/if}
+      </div>
+
+      <div class="field">
+        <span class="label">Couleur de la carte</span>
+        <div class="color-picker">
+          {#each COLORS as c}
+            <button
+              class="color-oval"
+              class:selected={cardColor === c.id}
+              style={c.id ? `background:var(--color-${c.id}-bg)` : ''}
+              title={c.name}
+              onclick={() => (cardColor = c.id)}
+            >
+              {#if !c.id}
+                <span class="color-none">∅</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
       </div>
 
       <div class="row toggles">
@@ -299,4 +412,34 @@
   .chip-x:hover {
     color: var(--red);
   }
+  .color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .color-oval {
+    width: 32px;
+    height: 22px;
+    border-radius: 11px;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elev);
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .color-oval:hover {
+    transform: scale(1.1);
+  }
+  .color-oval.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  .color-none {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1;
+  }
+
 </style>

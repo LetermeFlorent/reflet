@@ -109,7 +109,7 @@
   }
 </script>
 
-<div class="card pair">
+<div class="card pair" style={pair.color ? `background:var(--color-${pair.color}-bg)` : ''}>
     <div class="top">
       <div class="title">
         <h2>{pair.name}</h2>
@@ -117,6 +117,11 @@
       </div>
       {#if pair.watchRealtime && pair.enabled}
         <span class="badge live" title="Surveillance temps réel active">● Live</span>
+      {/if}
+      {#if pair.compression && pair.compression.method !== "off"}
+        <span class="badge comp" title={pair.compression.password ? "Protégé par mot de passe" : ""}>
+          {pair.compression.method}{pair.compression.level > 0 ? `-${pair.compression.level}` : ""}{pair.compression.password ? " 🔒" : ""}
+        </span>
       {/if}
       <span class="interval badge" title={intervalTitle}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -282,6 +287,10 @@
   .live {
     background: color-mix(in srgb, var(--green) 18%, transparent);
     color: var(--green);
+  }
+  .comp {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    color: var(--accent);
   }
   .actions {
     display: flex;

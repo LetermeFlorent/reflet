@@ -1,3 +1,4 @@
+use crate::compression::CompressionConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -42,6 +43,10 @@ pub struct SyncPair {
     pub min_file_size: u64,
     #[serde(default)]
     pub max_file_size: u64,
+    #[serde(default)]
+    pub color: String,
+    #[serde(default)]
+    pub compression: CompressionConfig,
     #[serde(default)]
     pub last_run: Option<LastRun>,
 }

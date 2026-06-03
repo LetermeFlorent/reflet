@@ -152,7 +152,6 @@
             ondragover={(e) => dragOver(e, i)}
             ondragend={dragEnd}
           >
-            <span class="drag-handle" title="Déplacer pour réordonner">⠿</span>
             <PairCard
               pair={p}
               onEdit={() => (editing = p)}
@@ -246,26 +245,15 @@
   .pair-drag {
     display: flex;
     align-items: stretch;
-    gap: 2px;
     border-radius: var(--r-card);
-    cursor: default;
+    cursor: grab;
   }
   .pair-drag:active {
+    cursor: grabbing;
     opacity: 0.7;
   }
-  .drag-handle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    flex: 0 0 auto;
-    cursor: grab;
-    color: var(--text-3);
-    font-size: 18px;
-    letter-spacing: -2px;
-    user-select: none;
-  }
-  .drag-handle:hover {
-    color: var(--accent);
+  .pair-drag > :global(.card) {
+    flex: 1;
+    min-width: 0;
   }
 </style>

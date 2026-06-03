@@ -1,3 +1,4 @@
+use crate::compression;
 use crate::config::{Settings, SyncPair};
 use crate::state::{AppState, LogEntry};
 use chrono::Utc;
@@ -29,6 +30,7 @@ struct CopyOp {
     size: u64,
     reason: String,
     is_new: bool,
+    use_compression: bool,
 }
 
 struct DeleteOp {
@@ -207,14 +209,14 @@ fn blake3_of(path: &Path) -> Option<[u8; 32]> {
     Some(*blake3::hash(&bytes).as_bytes())
 }
 
-fn detect_changed(src: &Entry, dst: &Entry, settings: &Settings) -> (bool, String) {
-    if src.size != dst.size {
+fn detect_changed(src: &Entry, dst: &Entry, settings: &Settings, compression: bool) -> (bool, String) {
+    if !compression && src.size != dst.size {
         return (true, "size".into());
     }
     if (src.mtime - dst.mtime).abs() > settings.mtime_tolerance_sec {
         return (true, "mtime".into());
     }
-    if settings.verify_by_content == "blake3" {
+    if !compression && settings.verify_by_content == "blake3" {
         match (blake3_of(&src.abs), blake3_of(&dst.abs)) {
             (Some(a), Some(b)) if a != b => return (true, "content".into()),
             _ => {}
@@ -228,6 +230,8 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
     let dest = PathBuf::from(&pair.destination);
     let min_size = pair.min_file_size;
     let max_size = pair.max_file_size;
+    let compression_ext = pair.compression.extension();
+    let use_compression = !compression_ext.is_empty();
 
     if pair.source.trim().is_empty() || pair.destination.trim().is_empty() {
         return Err("Source ou destination vide".into());
@@ -260,7 +264,25 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
         dest_map.retain(|_, e| filter_size(e));
     }
 
-    let dest_total = dest_map.len();
+    // If compression is active, normalize dest keys by stripping compression extension
+    let mut normalized: BTreeMap<String, Entry> = BTreeMap::new();
+
+    if use_compression {
+        for (k, v) in &dest_map {
+            if let Some(stripped) = k.strip_suffix(compression_ext) {
+                normalized.insert(stripped.to_string(), v.clone());
+            } else if !v.is_dir {
+                // Non-compressed file in destination — skip it (not managed)
+                continue;
+            } else {
+                normalized.insert(k.clone(), v.clone());
+            }
+        }
+    }
+
+    let dest_lookup: &BTreeMap<String, Entry> = if use_compression { &normalized } else { &dest_map };
+
+    let dest_total = dest_lookup.len();
 
     let mut create_dirs: Vec<(String, PathBuf)> = Vec::new();
     let mut copies: Vec<CopyOp> = Vec::new();
@@ -270,54 +292,66 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
     let dst_abs_of = |rel: &str| -> PathBuf { dest.join(rel) };
 
     for (k, se) in &src_map {
-        match dest_map.get(k) {
+        match dest_lookup.get(k) {
             None => {
                 if se.is_dir {
                     create_dirs.push((se.rel.clone(), dst_abs_of(&se.rel)));
                 } else {
                     total_bytes += se.size;
+                    let dst_rel = format!("{}{}", se.rel, compression_ext);
                     copies.push(CopyOp {
                         rel: se.rel.clone(),
                         src_abs: se.abs.clone(),
-                        dst_abs: dst_abs_of(&se.rel),
+                        dst_abs: dst_abs_of(&dst_rel),
                         size: se.size,
                         reason: "new".into(),
                         is_new: true,
+                        use_compression,
                     });
                 }
             }
             Some(de) => {
                 if se.is_dir && de.is_dir {
                 } else if !se.is_dir && !de.is_dir {
-                    let (changed, reason) = detect_changed(se, de, settings);
+                    let (changed, reason) = detect_changed(se, de, settings, use_compression);
                     if changed {
                         total_bytes += se.size;
+                        let dst_rel = format!("{}{}", se.rel, compression_ext);
                         copies.push(CopyOp {
                             rel: se.rel.clone(),
                             src_abs: se.abs.clone(),
-                            dst_abs: dst_abs_of(&se.rel),
+                            dst_abs: dst_abs_of(&dst_rel),
                             size: se.size,
                             reason,
                             is_new: false,
+                            use_compression,
                         });
                     }
                 } else {
+                    // Type mismatch: original entry path (with or without ext)
+                    let original_rel = if use_compression {
+                        format!("{}{}", se.rel, compression_ext)
+                    } else {
+                        se.rel.clone()
+                    };
                     deletes.push(DeleteOp {
-                        rel: de.rel.clone(),
-                        abs: de.abs.clone(),
+                        rel: original_rel.clone(),
+                        abs: dst_abs_of(&original_rel),
                         is_dir: de.is_dir,
                     });
                     if se.is_dir {
                         create_dirs.push((se.rel.clone(), dst_abs_of(&se.rel)));
                     } else {
                         total_bytes += se.size;
+                        let dst_rel = format!("{}{}", se.rel, compression_ext);
                         copies.push(CopyOp {
                             rel: se.rel.clone(),
                             src_abs: se.abs.clone(),
-                            dst_abs: dst_abs_of(&se.rel),
+                            dst_abs: dst_abs_of(&dst_rel),
                             size: se.size,
                             reason: "new".into(),
                             is_new: true,
+                            use_compression,
                         });
                     }
                 }
@@ -325,7 +359,7 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
         }
     }
 
-    let mut extras: Vec<&Entry> = dest_map
+    let mut extras: Vec<&Entry> = dest_lookup
         .iter()
         .filter(|(k, _)| !src_map.contains_key(*k))
         .map(|(_, e)| e)
@@ -342,9 +376,14 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
         if covered {
             continue;
         }
+        let original_rel = if use_compression && !e.is_dir {
+            format!("{}{}", e.rel, compression_ext)
+        } else {
+            e.rel.clone()
+        };
         deletes.push(DeleteOp {
-            rel: e.rel.clone(),
-            abs: e.abs.clone(),
+            rel: original_rel.clone(),
+            abs: dst_abs_of(&original_rel),
             is_dir: e.is_dir,
         });
         last_root = Some(e.rel.clone());
@@ -522,11 +561,19 @@ fn execute_plan(app: &AppHandle, pair: &SyncPair, settings: &Settings, plan: &Ex
     }
 
     for c in &plan.copies {
-        let mut res = copy_file_atomic(&c.src_abs, &c.dst_abs);
-        if res.is_err() {
-            std::thread::sleep(std::time::Duration::from_millis(60));
-            res = copy_file_atomic(&c.src_abs, &c.dst_abs);
-        }
+        let res = if c.use_compression {
+            let pw = pair.compression.password.as_deref();
+            compression::compress_file(&c.src_abs, &c.dst_abs, &pair.compression.method, pair.compression.level, pw)
+                .and_then(|_| compression::copy_mtime(&c.src_abs, &c.dst_abs))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        } else {
+            let mut r = copy_file_atomic(&c.src_abs, &c.dst_abs);
+            if r.is_err() {
+                std::thread::sleep(std::time::Duration::from_millis(60));
+                r = copy_file_atomic(&c.src_abs, &c.dst_abs);
+            }
+            r
+        };
         match res {
             Ok(()) => {
                 if c.is_new {

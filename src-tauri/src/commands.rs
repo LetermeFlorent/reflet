@@ -1,4 +1,5 @@
 
+use crate::compression::{self, CompressionMethod};
 use crate::config::{self, Settings, SyncPair};
 use crate::state::{AppState, LogEntry, SyncRequest};
 use crate::sync::{self, SyncPlan};
@@ -152,6 +153,10 @@ pub struct NewPair {
     pub min_file_size: u64,
     #[serde(default)]
     pub max_file_size: u64,
+    #[serde(default)]
+    pub color: String,
+    #[serde(default)]
+    pub compression: crate::compression::CompressionConfig,
 }
 
 fn default_true() -> bool {
@@ -188,6 +193,8 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
         schedule_times: new.schedule_times.clone(),
         min_file_size: new.min_file_size,
         max_file_size: new.max_file_size,
+        color: new.color.clone(),
+        compression: new.compression,
         last_run: None,
     };
     let source = pair.source.clone();
@@ -233,6 +240,8 @@ pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Re
                 existing.schedule_times = pair.schedule_times;
                 existing.min_file_size = pair.min_file_size;
                 existing.max_file_size = pair.max_file_size;
+                existing.color = pair.color;
+                existing.compression = pair.compression;
             }
             None => return Err("Paire introuvable".into()),
         }
@@ -414,4 +423,9 @@ pub fn quit_app(app: AppHandle) {
     let state = app.state::<AppState>();
     state.really_quit.store(true, Ordering::SeqCst);
     app.exit(0);
+}
+
+#[tauri::command]
+pub fn detect_compression_methods() -> Vec<CompressionMethod> {
+    compression::detect_methods()
 }
