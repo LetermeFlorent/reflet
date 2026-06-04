@@ -1,27 +1,35 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  // Remplissage piloté en JS (requestAnimationFrame) plutôt qu'en animation CSS :
-  // visible même si "réduire les animations" est activé côté OS, et progresse vraiment.
-  let pct = $state(0);
+  let bootEl: HTMLDivElement;
+  let pctEl: HTMLSpanElement;
 
   onMount(() => {
+    if (!pctEl || !bootEl) return;
+
     const start = performance.now();
     const dur = 3000;
     let raf = 0;
+
     const tick = (t: number) => {
-      pct = Math.min(100, Math.round(((t - start) / dur) * 100));
-      if (pct < 100) raf = requestAnimationFrame(tick);
+      const v = Math.min(100, Math.round(((t - start) / dur) * 100));
+      pctEl.textContent = v + "%";
+      if (v < 100) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   });
 </script>
 
-<div class="boot">
+<div class="boot" bind:this={bootEl}>
   <span class="brand">◑</span>
-  <div class="bar"><span style="width:{pct}%"></span></div>
-  <span class="pct">{pct}%</span>
+  <svg class="track" viewBox="0 0 200 6" preserveAspectRatio="none" aria-hidden="true">
+    <rect class="bg" x="0" y="0" width="200" height="6" rx="3" ry="3" />
+    <rect class="fill" x="0" y="0" width="0" height="6" rx="3" ry="3">
+      <animate attributeName="width" from="0" to="200" dur="3s" fill="freeze" begin="0s" />
+    </rect>
+  </svg>
+  <span class="pct" bind:this={pctEl}>0%</span>
 </div>
 
 <style>
@@ -42,18 +50,16 @@
     color: var(--accent);
     opacity: 0.7;
   }
-  .bar {
+  .track {
     width: 200px;
     height: 6px;
-    border-radius: var(--r-control);
-    background: var(--hover);
-    overflow: hidden;
-  }
-  .bar span {
     display: block;
-    height: 100%;
-    border-radius: var(--r-control);
-    background: var(--accent);
+  }
+  .track .bg {
+    fill: var(--hover);
+  }
+  .track .fill {
+    fill: var(--accent);
   }
   .pct {
     font-size: 12px;
