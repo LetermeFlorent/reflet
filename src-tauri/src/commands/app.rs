@@ -91,7 +91,13 @@ pub fn open_url(url: String) -> Result<(), String> {
         return Err("URL invalide".into());
     }
     #[cfg(target_os = "windows")]
-    let res = std::process::Command::new("cmd").args(["/C", "start", "", &url]).spawn();
+    let res = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn()
+    };
     #[cfg(target_os = "macos")]
     let res = std::process::Command::new("open").arg(&url).spawn();
     #[cfg(all(unix, not(target_os = "macos")))]

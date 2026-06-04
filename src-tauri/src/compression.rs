@@ -1,6 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Crée une Command qui n'ouvre PAS de fenêtre console sous Windows (CREATE_NO_WINDOW) :
+/// évite le flash de terminal au démarrage (détection des outils) et pendant la compression.
+fn command(program: &str) -> Command {
+    #[allow(unused_mut)]
+    let mut c = Command::new(program);
+    #[cfg(windows)]
+    c.creation_flags(0x0800_0000);
+    c
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,7 +61,7 @@ fn has_binary(name: &str) -> bool {
         matches!(name, "zpaq" | "7z" | "rar" | "tar"),
         "has_binary appelé avec un nom non codé en dur : {name}"
     );
-    Command::new(name).arg("--help").output().is_ok()
+    command(name).arg("--help").output().is_ok()
 }
 
 /// Formats capables de chiffrer l'archive par mot de passe :
@@ -143,7 +155,7 @@ pub fn build_external(
     let glob = format!("{src}\\*");
     let pwd = password.map(str::trim).filter(|p| !p.is_empty());
     let result = match method {
-        "zpaq" => Command::new("zpaq")
+        "zpaq" => command("zpaq")
             .args(["a", &outp, &glob, &format!("-m{}", level.clamp(1, 5))])
             .output(),
         "7z" => {
@@ -159,7 +171,7 @@ pub fn build_external(
             }
             args.push(outp.clone());
             args.push(glob.clone());
-            Command::new("7z").args(&args).output()
+            command("7z").args(&args).output()
         }
         "rar" => {
             let mut args = vec![
@@ -174,13 +186,13 @@ pub fn build_external(
             }
             args.push(outp.clone());
             args.push(glob.clone());
-            Command::new("rar").args(&args).output()
+            command("rar").args(&args).output()
         }
-        "tar.zst" => Command::new("tar").args(["--zstd", "-cf", &outp, "-C", &src, "."]).output(),
-        "tar.xz" => Command::new("tar").args(["-cJf", &outp, "-C", &src, "."]).output(),
-        "tar.gz" => Command::new("tar").args(["-czf", &outp, "-C", &src, "."]).output(),
-        "tar.bz2" => Command::new("tar").args(["-cjf", &outp, "-C", &src, "."]).output(),
-        "tar.lz4" => Command::new("tar").args(["--lz4", "-cf", &outp, "-C", &src, "."]).output(),
+        "tar.zst" => command("tar").args(["--zstd", "-cf", &outp, "-C", &src, "."]).output(),
+        "tar.xz" => command("tar").args(["-cJf", &outp, "-C", &src, "."]).output(),
+        "tar.gz" => command("tar").args(["-czf", &outp, "-C", &src, "."]).output(),
+        "tar.bz2" => command("tar").args(["-cjf", &outp, "-C", &src, "."]).output(),
+        "tar.lz4" => command("tar").args(["--lz4", "-cf", &outp, "-C", &src, "."]).output(),
         _ => return Err(format!("format externe inconnu : {method}")),
     };
     match result {
