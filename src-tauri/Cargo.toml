@@ -1,6 +1,6 @@
 [package]
 name = "reflet"
-version = "1.3.0"
+version = "1.4.0"
 description = "Reflet - synchronisation miroir unidirectionnelle"
 authors = ["you"]
 edition = "2021"
