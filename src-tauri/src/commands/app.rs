@@ -75,8 +75,13 @@ pub fn quit_app(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn detect_compression_methods() -> Vec<CompressionMethod> {
-    compression::detect_methods()
+pub async fn detect_compression_methods() -> Vec<CompressionMethod> {
+    // detect_methods() lance des sous-process (has_binary --help) → bloquant. On l'exécute
+    // hors du thread principal pour ne pas figer l'UI au démarrage (loader animé, fenêtre
+    // déplaçable) pendant la détection des outils externes.
+    tauri::async_runtime::spawn_blocking(compression::detect_methods)
+        .await
+        .unwrap_or_default()
 }
 
 /// Ouvre une URL dans le navigateur par défaut du système.
