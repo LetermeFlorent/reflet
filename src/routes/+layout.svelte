@@ -10,6 +10,9 @@
 
   let { children } = $props();
 
+  // Loader affiché au moins 3 s au démarrage, même si l'état charge plus vite.
+  let minElapsed = $state(false);
+
   async function toggleFullscreen() {
     const w = getCurrentWindow();
     await w.setFullscreen(!(await w.isFullscreen()));
@@ -18,6 +21,7 @@
   onMount(() => {
     store.refresh();
     store.loadCompressionMethods();
+    const minTimer = setTimeout(() => (minElapsed = true), 3000);
     let cleanup: (() => void) | undefined;
     store.initListeners().then((fn) => (cleanup = fn));
 
@@ -34,6 +38,7 @@
 
     return () => {
       cleanup?.();
+      clearTimeout(minTimer);
       window.removeEventListener("keydown", onKey);
     };
   });
@@ -47,7 +52,7 @@
   ];
 </script>
 
-{#if !store.loaded}
+{#if !store.loaded || !minElapsed}
   <Loader />
 {/if}
 
