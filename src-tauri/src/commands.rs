@@ -23,6 +23,19 @@ fn persist_and_notify(app: &AppHandle, state: &AppState) -> Result<(), String> {
     Ok(())
 }
 
+/// Démarre ou arrête le watcher temps-réel d'une paire selon (enabled && watch).
+fn reconcile_watcher(state: &AppState, id: &str, enabled: bool, watch: bool, source: Option<&str>) {
+    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
+        if enabled && watch {
+            if let Some(src) = source {
+                wm.start(id, src);
+            }
+        } else {
+            wm.stop(id);
+        }
+    }
+}
+
 pub fn apply_autostart(app: &AppHandle, enable: bool) {
     #[cfg(desktop)]
     {
@@ -196,11 +209,7 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
     };
     let source = pair.source.clone();
     state.config.lock().unwrap().pairs.push(pair);
-    if enabled && watch_realtime {
-        if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
-            wm.start(&id, &source);
-        }
-    }
+    reconcile_watcher(&state, &id, enabled, watch_realtime, Some(&source));
     persist_and_notify(&app, &state)?;
     Ok(id)
 }
@@ -286,15 +295,7 @@ pub fn set_pair_enabled(app: AppHandle, state: State<AppState>, id: String, enab
             None => return Err("Paire introuvable".into()),
         }
     }
-    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
-        if enabled && watch {
-            if let Some(src) = &source {
-                wm.start(&id, src);
-            }
-        } else {
-            wm.stop(&id);
-        }
-    }
+    reconcile_watcher(&state, &id, enabled, watch, source.as_deref());
     persist_and_notify(&app, &state)
 }
 
@@ -314,15 +315,7 @@ pub fn set_pair_watch_realtime(app: AppHandle, state: State<AppState>, id: Strin
             None => return Err("Paire introuvable".into()),
         }
     }
-    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
-        if enabled && watch {
-            if let Some(src) = &source {
-                wm.start(&id, src);
-            }
-        } else {
-            wm.stop(&id);
-        }
-    }
+    reconcile_watcher(&state, &id, enabled, watch, source.as_deref());
     persist_and_notify(&app, &state)
 }
 
