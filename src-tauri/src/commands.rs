@@ -17,6 +17,12 @@ fn notify_state_changed(app: &AppHandle) {
     let _ = app.emit("state:changed", serde_json::json!({}));
 }
 
+fn persist_and_notify(app: &AppHandle, state: &AppState) -> Result<(), String> {
+    persist(app, state)?;
+    notify_state_changed(app);
+    Ok(())
+}
+
 pub fn apply_autostart(app: &AppHandle, enable: bool) {
     #[cfg(desktop)]
     {
@@ -42,8 +48,6 @@ pub fn trigger_all(app: &AppHandle) {
 }
 
 
-const MIN_INTERVAL: u64 = 5;
-
 #[tauri::command]
 pub fn get_app_state(state: State<AppState>) -> serde_json::Value {
     let cfg = state.config.lock().unwrap();
@@ -61,10 +65,7 @@ pub fn get_app_state(state: State<AppState>) -> serde_json::Value {
                 statuses.get(&p.id).cloned().unwrap_or_else(|| "idle".into())
             };
             let next_run_sec: Option<u64> = if p.enabled && scheduler_running {
-                let iv = match p.interval_sec_override {
-                    Some(v) if v >= MIN_INTERVAL => v,
-                    _ => cfg.settings.interval_sec.max(MIN_INTERVAL),
-                };
+                let iv = crate::scheduler::pair_interval(p, &cfg.settings);
                 let elapsed = last_started
                     .get(&p.id)
                     .map(|t| now.duration_since(*t).as_secs())
@@ -111,9 +112,7 @@ pub fn update_settings(app: AppHandle, state: State<AppState>, settings: Setting
         .scheduler_running
         .store(settings.scheduler_running, Ordering::SeqCst);
     apply_autostart(&app, settings.autostart);
-    persist(&app, &state)?;
-    notify_state_changed(&app);
-    Ok(())
+    persist_and_notify(&app, &state)
 }
 
 #[tauri::command]
@@ -123,9 +122,7 @@ pub fn set_scheduler_running(app: AppHandle, state: State<AppState>, running: bo
         let mut cfg = state.config.lock().unwrap();
         cfg.settings.scheduler_running = running;
     }
-    persist(&app, &state)?;
-    notify_state_changed(&app);
-    Ok(())
+    persist_and_notify(&app, &state)
 }
 
 
@@ -204,8 +201,7 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
             wm.start(&id, &source);
         }
     }
-    persist(&app, &state)?;
-    notify_state_changed(&app);
+    persist_and_notify(&app, &state)?;
     Ok(id)
 }
 
@@ -258,9 +254,7 @@ pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Re
             wm.start(&id, &new_source);
         }
     }
-    persist(&app, &state)?;
-    notify_state_changed(&app);
-    Ok(())
+    persist_and_notify(&app, &state)
 }
 
 #[tauri::command]
@@ -273,9 +267,7 @@ pub fn delete_pair(app: AppHandle, state: State<AppState>, id: String) -> Result
     if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
         wm.stop(&id);
     }
-    persist(&app, &state)?;
-    notify_state_changed(&app);
-    Ok(())
+    persist_and_notify(&app, &state)
 }
 
 #[tauri::command]
@@ -303,9 +295,7 @@ pub fn set_pair_enabled(app: AppHandle, state: State<AppState>, id: String, enab
             wm.stop(&id);
         }
     }
-    persist(&app, &state)?;
-    notify_state_changed(&app);
-    Ok(())
+    persist_and_notify(&app, &state)
 }
 
 #[tauri::command]
@@ -333,9 +323,7 @@ pub fn set_pair_watch_realtime(app: AppHandle, state: State<AppState>, id: Strin
             wm.stop(&id);
         }
     }
-    persist(&app, &state)?;
-    notify_state_changed(&app);
-    Ok(())
+    persist_and_notify(&app, &state)
 }
 
 #[tauri::command]

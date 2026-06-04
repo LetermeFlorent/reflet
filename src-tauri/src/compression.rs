@@ -61,6 +61,15 @@ fn has_binary(name: &str) -> bool {
         .is_ok()
 }
 
+/// Vérifie le code de sortie d'un process ; en cas d'échec, remonte stderr.
+fn check_output(out: &std::process::Output, label: &str) -> Result<(), String> {
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(format!("{label} échec : {}", String::from_utf8_lossy(&out.stderr)))
+    }
+}
+
 fn has_powershell_zip() -> bool {
     #[cfg(windows)]
     {
@@ -188,11 +197,7 @@ fn compress_zip(src: &Path, dst: &Path, level: u32, password: Option<&str>) -> R
             .args(["-NoProfile", "-Command", &ps_script])
             .output()
             .map_err(|e| format!("Échec PowerShell : {e}"))?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            return Err(format!("Compress-Archive échec : {stderr}"));
-        }
-        Ok(())
+        check_output(&out, "Compress-Archive")
     } else {
         compress_7z(src, dst, level, None)
     }
@@ -212,11 +217,7 @@ fn compress_7z(src: &Path, dst: &Path, level: u32, password: Option<&str>) -> Re
         .args(&args)
         .output()
         .map_err(|e| format!("7z introuvable : {e}"))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("7z échec : {stderr}"));
-    }
-    Ok(())
+    check_output(&out, "7z")
 }
 
 fn compress_zstd(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
@@ -226,11 +227,7 @@ fn compress_zstd(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
         .args([format!("-{level}"), "-f".to_string(), "-o".to_string(), dst_str, src_str])
         .output()
         .map_err(|e| format!("zstd introuvable : {e}"))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("zstd échec : {stderr}"));
-    }
-    Ok(())
+    check_output(&out, "zstd")
 }
 
 /// Outils filtre type `cmd -<level> -c <src> > dst` (gzip, xz, lz4) : on redirige
@@ -249,11 +246,7 @@ fn compress_stream(cmd: &str, src: &Path, dst: &Path, level: u32) -> Result<(), 
     let out = child
         .wait_with_output()
         .map_err(|e| format!("{cmd} échec : {e}"))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("{cmd} échec : {stderr}"));
-    }
-    Ok(())
+    check_output(&out, cmd)
 }
 
 /// Copy mtime from source to destination file for change detection purposes.

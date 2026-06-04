@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use tauri::async_runtime::{channel, spawn, spawn_blocking, Sender};
 use tauri::{AppHandle, Emitter, Manager};
 
-const MIN_INTERVAL: u64 = 5;
+pub const MIN_INTERVAL: u64 = 5;
 const MAX_SLEEP: u64 = 1800;
 const MIN_SLEEP: u64 = 3;
 
@@ -94,7 +94,7 @@ fn current_settings(app: &AppHandle) -> Settings {
     app.state::<AppState>().config.lock().unwrap().settings.clone()
 }
 
-fn pair_interval(pair: &SyncPair, settings: &Settings) -> u64 {
+pub fn pair_interval(pair: &SyncPair, settings: &Settings) -> u64 {
     match pair.interval_sec_override {
         Some(v) if v >= MIN_INTERVAL => v,
         _ => settings.interval_sec.max(MIN_INTERVAL),
