@@ -8,18 +8,20 @@
     onReplace,
     onRemove,
     busy = false,
+    showAddButton = true,
   }: {
     patterns: string[];
     onAdd: (ps: string[]) => void;
     onReplace: (i: number, ps: string[]) => void;
     onRemove: (i: number) => void;
     busy?: boolean;
+    showAddButton?: boolean;
   } = $props();
 
   let modalOpen = $state(false);
   let editIdx = $state<number | null>(null);
 
-  function openAdd() {
+  export function openAdd() {
     editIdx = null;
     modalOpen = true;
   }
@@ -48,10 +50,12 @@
   }
 </script>
 
-<div class="head">
-  <div class="spacer"></div>
-  <button class="btn" onclick={openAdd} disabled={busy}>+ Ajouter</button>
-</div>
+{#if showAddButton}
+  <div class="head">
+    <div class="spacer"></div>
+    <button class="btn" onclick={openAdd} disabled={busy}>+ Ajouter</button>
+  </div>
+{/if}
 
 {#if patterns.length === 0}
   <p class="muted empty">Aucune exclusion. Clique sur « + Ajouter ».</p>

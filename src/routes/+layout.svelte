@@ -17,6 +17,7 @@
 
   onMount(() => {
     store.refresh();
+    store.loadCompressionMethods();
     let cleanup: (() => void) | undefined;
     store.initListeners().then((fn) => (cleanup = fn));
 
@@ -40,6 +41,7 @@
   const nav = [
     { href: "/", label: "Tableau de bord", icon: "▦" },
     { href: "/exclusions", label: "Exclusions", icon: "⊘" },
+    { href: "/compression", label: "Compression", icon: "▤" },
     { href: "/settings", label: "Réglages", icon: "⚙" },
     { href: "/logs", label: "Journal", icon: "≣" },
   ];
@@ -64,7 +66,7 @@
     </nav>
     <div class="spacer"></div>
     <div class="side-foot">
-      <button class="btn btn-sm btn-ghost" onclick={() => api.quitApp()}>Quitter</button>
+      <button class="btn" onclick={() => api.quitApp()}>Quitter</button>
     </div>
   </aside>
 
@@ -84,7 +86,7 @@
 <style>
   .app {
     display: grid;
-    grid-template-columns: max-content 1fr;
+    grid-template-columns: 216px 1fr;
     height: 100vh;
     overflow: hidden;
     background: var(--bg);

@@ -2,9 +2,9 @@
   import type { SyncPair } from "$lib/types";
   import { api } from "$lib/ipc";
   import { store } from "$lib/store.svelte";
-  import { formatDate, formatInterval } from "$lib/format";
-  import StatusBadge from "./StatusBadge.svelte";
-  import Switch from "./Switch.svelte";
+  import CardHeader from "./CardHeader.svelte";
+  import CardStatusLine from "./CardStatusLine.svelte";
+  import SyncButton from "./SyncButton.svelte";
 
   let {
     pair,
@@ -21,75 +21,6 @@
   );
   const indeterminate = $derived(isSyncing && (!store.progress || store.progress.total === 0));
   const compact = $derived(store.settings?.compactCards ?? false);
-
-  let etaSec = $state<number | null>(null);
-  let startAt = 0;
-
-  $effect(() => {
-    if (!isSyncing) {
-      etaSec = null;
-      startAt = 0;
-      return;
-    }
-    if (startAt === 0) startAt = Date.now();
-    const tick = () => {
-      const p = store.progress;
-      if (!p || p.total <= 0 || p.done <= 0) {
-        etaSec = null;
-        return;
-      }
-      const elapsed = (Date.now() - startAt) / 1000;
-      if (elapsed <= 0.5) {
-        etaSec = null;
-        return;
-      }
-      const rate = p.done / elapsed;
-      etaSec = Math.max(0, Math.round((p.total - p.done) / rate));
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  });
-
-  function formatDur(s: number): string {
-    if (s < 60) return `${s} s`;
-    const m = Math.floor(s / 60);
-    const ss = s % 60;
-    return ss ? `${m} min ${ss} s` : `${m} min`;
-  }
-
-  let nextSec = $state<number | null>(null);
-
-  $effect(() => {
-    void store.rev;
-    const ns = pair.nextRunSec;
-    if (ns == null) {
-      nextSec = null;
-      return;
-    }
-    const targetMs = Date.now() + ns * 1000;
-    const tick = () => {
-      nextSec = Math.max(0, Math.round((targetMs - Date.now()) / 1000));
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  });
-
-  const intervalLabel = $derived.by(() => {
-    if (pair.scheduleTimes?.length > 0) {
-      return pair.scheduleTimes.join(', ');
-    }
-    const ov = pair.intervalSecOverride;
-    if (ov != null && ov > 0) return formatInterval(ov);
-    const g = store.settings?.intervalSec ?? 900;
-    return `${formatInterval(g)} (défaut)`;
-  });
-
-  const intervalTitle = $derived.by(() => {
-    if (pair.scheduleTimes?.length > 0) return "Planifié à des horaires spécifiques";
-    return "Intervalle de synchro automatique";
-  });
 
   async function toggle(enabled: boolean) {
     try {
@@ -109,31 +40,12 @@
   }
 </script>
 
-<div class="card pair" style={pair.color ? `background:var(--color-${pair.color}-bg)` : ''}>
-    <div class="top">
-      <div class="title">
-        <h2>{pair.name}</h2>
-        <StatusBadge status={pair.status} />
-      </div>
-      {#if pair.watchRealtime && pair.enabled}
-        <span class="badge live" title="Surveillance temps réel active">● Live</span>
-      {/if}
-      {#if pair.compression && pair.compression.method !== "off"}
-        <span class="badge comp" title={pair.compression.password ? "Protégé par mot de passe" : ""}>
-          {pair.compression.method}{pair.compression.level > 0 ? `-${pair.compression.level}` : ""}{pair.compression.password ? " 🔒" : ""}
-        </span>
-      {/if}
-      <span class="interval badge" title={intervalTitle}>
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8.5" r="5.5" stroke="currentColor" stroke-width="1.3" />
-          <path d="M8 5.5V8.5L10 10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-          <path d="M6 1.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-        </svg>
-        {intervalLabel}
-      </span>
-      <div class="spacer"></div>
-      <Switch checked={pair.enabled} onchange={toggle} />
-    </div>
+<div
+  class="card pair"
+  class:tinted={!!pair.color}
+  style={pair.color ? `--card-glow:var(--color-${pair.color}-glow)` : ""}
+>
+  <CardHeader {pair} onToggle={toggle} />
 
   <div class="paths mono">
     <span class="path" title={pair.source}>{pair.source}</span>
@@ -142,44 +54,11 @@
   </div>
 
   <div class="bottom">
-    <div class="last muted">
-      {#if isSyncing}
-        <span class="sync-status">
-          Synchro… {indeterminate ? "…" : pct + " %"}{#if etaSec !== null} · ~{formatDur(etaSec)} restant{/if}
-        </span>
-      {:else}
-        {#if compact}
-          {pair.lastRun ? (pair.lastRun.errors > 0 ? "Synchro avec erreurs" : "À jour") : "Jamais synchronisé"}
-        {:else if pair.lastRun}
-          Dernière : {formatDate(pair.lastRun.at)} ·
-          <span style="color:var(--green)">{pair.lastRun.copied}</span> copiés ·
-          <span style="color:var(--accent)">{pair.lastRun.updated}</span> màj ·
-          <span style="color:var(--red)">{pair.lastRun.deleted}</span> suppr.
-          {#if pair.lastRun.errors > 0}
-            · <span style="color:var(--red)">{pair.lastRun.errors} err.</span>
-          {/if}
-        {:else}
-          Jamais synchronisé
-        {/if}
-        {#if nextSec !== null}
-          <span class="next">· prochaine dans {formatDur(nextSec)}</span>
-        {/if}
-      {/if}
-    </div>
+    <CardStatusLine {pair} {isSyncing} {pct} {indeterminate} {compact} />
     <div class="spacer"></div>
     <div class="actions">
       <button class="btn btn-sm" onclick={onDryRun}>Aperçu</button>
-      <button
-        class="btn btn-sm sync-btn"
-        class:syncing={isSyncing}
-        onclick={syncNow}
-        disabled={isSyncing}
-      >
-        {#if isSyncing}
-          <span class="fill" class:indet={indeterminate} style="width:{pct}%"></span>
-        {/if}
-        <span class="lbl">{isSyncing ? (indeterminate ? "…" : pct + "%") : "Synchroniser"}</span>
-      </button>
+      <SyncButton {isSyncing} {pct} {indeterminate} onclick={syncNow} />
       <button class="btn btn-sm btn-ghost btn-icon" title="Modifier" aria-label="Modifier" onclick={onEdit}>
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
           <path d="M11.5 2.5l2 2L6 12l-2.5.5L4 10l7.5-7.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
@@ -201,55 +80,26 @@
     flex-direction: column;
     gap: var(--s3);
   }
-  .sync-btn {
+  /* Accent couleur moderne : barre verticale a gauche + leger degrade qui s'estompe. */
+  .pair.tinted {
     position: relative;
     overflow: hidden;
-    min-width: 112px;
+    background:
+      linear-gradient(
+        to right,
+        color-mix(in srgb, var(--card-glow) 14%, transparent),
+        transparent 45%
+      ),
+      var(--bg-elev);
   }
-  .sync-btn.syncing {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .sync-btn .fill {
+  .pair.tinted::before {
+    content: "";
     position: absolute;
     left: 0;
     top: 0;
     bottom: 0;
-    width: 0;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    transition: width 0.25s var(--ease);
-  }
-  .sync-btn .fill.indet {
-    width: 45% !important;
-    animation: indet 1.1s ease-in-out infinite;
-  }
-  @keyframes indet {
-    0% {
-      transform: translateX(-110%);
-    }
-    100% {
-      transform: translateX(260%);
-    }
-  }
-  .sync-btn .lbl {
-    position: relative;
-    z-index: 1;
-  }
-  .top {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
-  }
-  .title {
-    display: flex;
-    align-items: center;
-    gap: var(--s3);
-    min-width: 0;
-  }
-  .title h2 {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    width: 4px;
+    background: var(--card-glow);
   }
   .paths {
     display: flex;
@@ -272,25 +122,6 @@
     align-items: center;
     gap: var(--s3);
     flex-wrap: wrap;
-  }
-  .last {
-    font-size: 12px;
-  }
-  .sync-status {
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .next {
-    margin-left: 4px;
-    color: var(--text-2);
-  }
-  .live {
-    background: color-mix(in srgb, var(--green) 18%, transparent);
-    color: var(--green);
-  }
-  .comp {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
-    color: var(--accent);
   }
   .actions {
     display: flex;

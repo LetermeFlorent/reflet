@@ -1,13 +1,14 @@
 <script lang="ts">
-  import type { CompressionConfig, CompressionMethod, SyncPair } from "$lib/types";
+  import type { CompressionConfig, SyncPair } from "$lib/types";
   import { api } from "$lib/ipc";
   import { store } from "$lib/store.svelte";
   import Switch from "./Switch.svelte";
-  import Select from "./Select.svelte";
   import IntervalPicker from "./IntervalPicker.svelte";
   import ExclusionsManager from "./ExclusionsManager.svelte";
+  import ScheduleTimesEditor from "./ScheduleTimesEditor.svelte";
+  import CompressionSettings from "./CompressionSettings.svelte";
+  import ColorPicker from "./ColorPicker.svelte";
   import { formatInterval } from "$lib/format";
-  import { onMount } from "svelte";
 
   let {
     pair,
@@ -27,77 +28,18 @@
   let intervalSec = $state<number | null>(pair?.intervalSecOverride ?? null);
   let watchRealtime = $state(pair?.watchRealtime ?? false);
   let scheduleTimes = $state<string[]>([...(pair?.scheduleTimes ?? [])]);
-  let scheduleInput = $state("");
   let minFileSize = $state(pair?.minFileSize ?? 0);
   let maxFileSize = $state(pair?.maxFileSize ?? 0);
   let cardColor = $state(pair?.color ?? "");
+  let backupMode = $state(pair?.backupMode ?? false);
   let saving = $state(false);
 
-  // Compression
-  let compMethod = $state(pair?.compression?.method ?? "off");
-  let compLevel = $state(pair?.compression?.level ?? 0);
-  let compPassword = $state(pair?.compression?.password ?? "");
-  let availableMethods = $state<CompressionMethod[]>([]);
-
-  async function loadMethods() {
-    try {
-      availableMethods = await api.detectCompressionMethods();
-    } catch {
-      // silencieux
-    }
-  }
-  onMount(loadMethods);
-
-  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-  function addScheduleTime() {
-    const t = scheduleInput.trim();
-    if (TIME_RE.test(t) && !scheduleTimes.includes(t)) {
-      scheduleTimes = [...scheduleTimes, t];
-    }
-    scheduleInput = "";
-  }
-  function removeScheduleTime(i: number) {
-    scheduleTimes = scheduleTimes.filter((_, j) => j !== i);
-  }
-  const scheduleInputValid = $derived(TIME_RE.test(scheduleInput.trim()));
-
-  const selectedMethodMeta = $derived(availableMethods.find(m => m.id === compMethod));
-  const compLevelMax = $derived(selectedMethodMeta?.maxLevel ?? 0);
-  const compLevelDefault = $derived(selectedMethodMeta?.defaultLevel ?? 0);
-  const compSupportsPassword = $derived(selectedMethodMeta?.supportsPassword ?? false);
-  const availMethods = $derived(availableMethods.filter(m => m.available));
-  const unavailMethods = $derived(availableMethods.filter(m => !m.available));
-  const compOptions = $derived([
-    { value: "off", label: "Aucune (copie brute)" },
-    ...availableMethods.map(m => ({
-      value: m.id,
-      label: `${m.name} (${m.extension})${m.available ? '' : ' — non installé'}`,
-      disabled: !m.available,
-    })),
-  ]);
-
-  // On method change, ensure level is valid
-  let prevCompMethod = $state(compMethod);
-  $effect(() => {
-    if (compMethod !== prevCompMethod) {
-      prevCompMethod = compMethod;
-      if (compMethod !== "off" && compLevelDefault > 0 && (compLevel === 0 || compLevel > compLevelMax)) {
-        compLevel = compLevelDefault;
-      }
-    }
+  let compression = $state<CompressionConfig>({
+    method: pair?.compression?.method ?? store.settings?.defaultCompressionMethod ?? "off",
+    level: pair?.compression?.level ?? store.settings?.defaultCompressionLevel ?? 0,
+    password: pair?.compression?.password ?? null,
+    archiveName: pair?.compression?.archiveName ?? "",
   });
-
-  const COLORS = [
-    { id: "", name: "Aucune" },
-    { id: "bleu", name: "Bleu" },
-    { id: "vert", name: "Vert" },
-    { id: "orange", name: "Orange" },
-    { id: "rose", name: "Rose" },
-    { id: "violet", name: "Violet" },
-    { id: "teal", name: "Teal" },
-    { id: "jaune", name: "Jaune" },
-    { id: "rouge", name: "Rouge" },
-  ];
 
   function excAdd(ps: string[]) {
     for (const p of ps) if (!ignoreList.includes(p)) ignoreList.push(p);
@@ -142,14 +84,10 @@
     saving = true;
     const ignorePatterns = $state.snapshot(ignoreList);
     const intervalSecOverride = intervalSec;
-    const times = $state.snapshot(scheduleTimes).filter((t) => TIME_RE.test(t));
+    const times = $state.snapshot(scheduleTimes);
     const minSize = Math.max(0, Math.trunc(minFileSize || 0));
     const maxSize = Math.max(0, Math.trunc(maxFileSize || 0));
-    const compression: CompressionConfig = {
-      method: compMethod,
-      level: compMethod === "off" ? 0 : (compLevel || compLevelDefault),
-      password: compSupportsPassword && compPassword ? compPassword : null,
-    };
+    const compressionCfg = $state.snapshot(compression);
     try {
       if (isEdit && pair) {
         await api.updatePair({
@@ -167,7 +105,8 @@
           minFileSize: minSize,
           maxFileSize: maxSize,
           color: cardColor,
-          compression,
+          compression: compressionCfg,
+          backupMode,
         });
       } else {
         await api.addPair({
@@ -184,7 +123,8 @@
           minFileSize: minSize,
           maxFileSize: maxSize,
           color: cardColor,
-          compression,
+          compression: compressionCfg,
+          backupMode,
         });
       }
       onSaved();
@@ -206,152 +146,135 @@
     </div>
 
     <div class="form">
-      <div class="field">
-        <span class="label">Nom</span>
-        <input class="input" bind:value={name} placeholder="ex. Documents → NAS" />
-      </div>
-
-      <div class="field">
-        <span class="label">Dossier source (autorité)</span>
-        <div class="row">
-          <input class="input" bind:value={source} placeholder="Choisir un dossier…" />
-          <button class="btn" onclick={() => pick("source")}>Parcourir</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <span class="label">Dossier destination (sera reflété)</span>
-        <div class="row">
-          <input class="input" bind:value={destination} placeholder="Choisir un dossier…" />
-          <button class="btn" onclick={() => pick("destination")}>Parcourir</button>
-        </div>
-      </div>
-
-      {#if overlap}
-        <div class="err">
-          Source et destination imbriquées (l'une contient l'autre) — interdit.
-        </div>
-      {/if}
-
-      <div class="field">
-        <span class="label">Intervalle de synchro auto</span>
-        <IntervalPicker bind:seconds={intervalSec} allowDefault={true} />
-        <span class="muted" style="font-size:12px">
-          {intervalSec == null ? `Hérite du défaut global (${globalLabel})` : "Rythme propre à cette paire"}
-          · minimum 5 s
-        </span>
-      </div>
-
-      <div class="row fields-row">
-        <div class="field" style="flex:1">
-          <span class="label">Taille min. (octets)</span>
-          <input class="input" type="number" min="0" bind:value={minFileSize} placeholder="0 = aucun filtre" />
-        </div>
-        <div class="field" style="flex:1">
-          <span class="label">Taille max. (octets)</span>
-          <input class="input" type="number" min="0" bind:value={maxFileSize} placeholder="0 = aucun filtre" />
-        </div>
-      </div>
-
-      <div class="field">
-        <span class="label">Planification avancée (horaires spécifiques)</span>
-        <div class="row">
-          <input class="input" style="width:100px" placeholder="HH:MM" bind:value={scheduleInput} onkeydown={(e) => e.key === 'Enter' && addScheduleTime()} />
-          <button class="btn btn-sm" onclick={addScheduleTime} disabled={!scheduleInputValid}>Ajouter</button>
-        </div>
-        {#if scheduleTimes.length > 0}
-          <div class="chips" style="margin-top:6px">
-            {#each scheduleTimes as t, i}
-              <span class="chip">
-                {t}
-                <button class="chip-x" onclick={() => removeScheduleTime(i)}>×</button>
-              </span>
-            {/each}
+      <section class="sec">
+        <h2 class="sec-t">Général</h2>
+        <div class="sec-body">
+          <div class="field">
+            <span class="label">Nom</span>
+            <input class="input" bind:value={name} placeholder="ex. Documents → NAS" />
           </div>
-        {/if}
-        <span class="muted" style="font-size:12px">Laisse vide pour utiliser l'intervalle classique.</span>
-      </div>
-
-      <div class="field">
-        <span class="label">Exclusions propres à cette paire (en plus des exclusions globales)</span>
-        <ExclusionsManager
-          patterns={ignoreList}
-          onAdd={excAdd}
-          onReplace={excReplace}
-          onRemove={excRemove}
-        />
-      </div>
-
-      <div class="field">
-        <span class="label">Compression</span>
-        <Select bind:value={compMethod} options={compOptions} />
-
-        {#if compMethod !== "off" && selectedMethodMeta}
-          {#if !selectedMethodMeta.available}
-            <div class="err" style="margin-top:4px;font-size:12px">
-              {selectedMethodMeta.name} n'est pas installé.
-              <a href={selectedMethodMeta.downloadUrl} target="_blank" rel="noopener noreferrer">Télécharger {selectedMethodMeta.name}</a>
+          <div class="field">
+            <span class="label">Dossier source (autorité)</span>
+            <div class="row">
+              <input class="input" bind:value={source} placeholder="Choisir un dossier…" />
+              <button class="btn" onclick={() => pick("source")}>Parcourir</button>
             </div>
-          {:else}
-            <div style="margin-bottom:6px">
-              <span class="label" style="font-size:12px">Niveau de compression ({compLevel}/{selectedMethodMeta.maxLevel})</span>
-              <input class="input" type="range" min="1" max={selectedMethodMeta.maxLevel} bind:value={compLevel} style="width:100%" />
+          </div>
+          <div class="field">
+            <span class="label">Dossier destination (sera reflété)</span>
+            <div class="row">
+              <input class="input" bind:value={destination} placeholder="Choisir un dossier…" />
+              <button class="btn" onclick={() => pick("destination")}>Parcourir</button>
             </div>
-            {#if compSupportsPassword}
-              <div>
-                <span class="label" style="font-size:12px">Mot de passe (optionnel)</span>
-                <input class="input" type="password" bind:value={compPassword} placeholder="Laisser vide = pas de mot de passe" />
-              </div>
-            {/if}
+          </div>
+          {#if overlap}
+            <div class="err">
+              Source et destination imbriquées (l'une contient l'autre) — interdit.
+            </div>
           {/if}
-        {/if}
-        {#if availableMethods.length === 0}
-          <div class="muted" style="font-size:12px">Chargement des méthodes disponibles…</div>
-        {/if}
-      </div>
-
-      <div class="field">
-        <span class="label">Couleur de la carte</span>
-        <div class="color-picker">
-          {#each COLORS as c}
-            <button
-              class="color-oval"
-              class:selected={cardColor === c.id}
-              style={c.id ? `background:var(--color-${c.id}-bg)` : ''}
-              title={c.name}
-              onclick={() => (cardColor = c.id)}
-            >
-              {#if !c.id}
-                <span class="color-none">∅</span>
-              {/if}
-            </button>
-          {/each}
+          <label class="tg">
+            <Switch bind:checked={enabled} />
+            <span>Paire activée</span>
+          </label>
         </div>
-      </div>
+      </section>
 
-      <div class="row toggles">
-        <label class="tg">
-          <Switch bind:checked={enabled} />
-          <span>Activée</span>
-        </label>
-        <label class="tg">
-          <Switch bind:checked={watchRealtime} />
-          <span>Temps réel</span>
-        </label>
-        <label class="tg">
-          <Switch bind:checked={notifyPc} />
-          <span>Notif PC</span>
-        </label>
-        <label class="tg">
-          <Switch bind:checked={notifyApp} />
-          <span>Notif app</span>
-        </label>
-      </div>
-      <p class="muted" style="font-size:12px">
-        <strong>Temps réel</strong> surveille le dossier source et déclenche une synchro dès qu'un changement est détecté (avec un délai de 3 secondes).<br />
-        Les notifs ne s'affichent que si le type est aussi activé dans Réglages (interrupteur
-        maître).
-      </p>
+      <section class="sec">
+        <h2 class="sec-t">Synchronisation automatique</h2>
+        <div class="sec-body">
+          <div class="field">
+            <span class="label">Intervalle</span>
+            <IntervalPicker bind:seconds={intervalSec} allowDefault={true} />
+            <span class="hint">
+              {intervalSec == null ? `Hérite du défaut global (${globalLabel})` : "Rythme propre à cette paire"}
+              · minimum 5 s
+            </span>
+          </div>
+          <div class="field">
+            <span class="label">Horaires spécifiques</span>
+            <ScheduleTimesEditor bind:times={scheduleTimes} />
+            <span class="hint">Laisse vide pour utiliser l'intervalle ci-dessus.</span>
+          </div>
+          <div class="field">
+            <label class="tg">
+              <Switch bind:checked={watchRealtime} />
+              <span>Temps réel</span>
+            </label>
+            <span class="hint">
+              Surveille la source et déclenche une synchro dès qu'un changement est détecté (délai 3 s).
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2 class="sec-t">Filtres</h2>
+        <div class="sec-body">
+          <div class="row fields-row">
+            <div class="field" style="flex:1">
+              <span class="label">Taille min. (octets)</span>
+              <input class="input" type="number" min="0" bind:value={minFileSize} placeholder="0 = aucun filtre" />
+            </div>
+            <div class="field" style="flex:1">
+              <span class="label">Taille max. (octets)</span>
+              <input class="input" type="number" min="0" bind:value={maxFileSize} placeholder="0 = aucun filtre" />
+            </div>
+          </div>
+          <div class="field">
+            <span class="label">Exclusions propres à cette paire</span>
+            <ExclusionsManager
+              patterns={ignoreList}
+              onAdd={excAdd}
+              onReplace={excReplace}
+              onRemove={excRemove}
+            />
+            <span class="hint">En plus des exclusions globales (Réglages).</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2 class="sec-t">Destination</h2>
+        <div class="sec-body">
+          <div class="field">
+            <label class="tg">
+              <Switch bind:checked={backupMode} />
+              <span>Mode sauvegarde (copies horodatées)</span>
+            </label>
+            <span class="hint">
+              Au lieu de refléter la source, crée à chaque synchro un dossier
+              <code>backup-AAAA-MM-JJ_HH-MM-SS</code> avec une copie complète. Aucune suppression.
+            </span>
+          </div>
+          <div class="field">
+            <span class="label">Compression</span>
+            <CompressionSettings bind:config={compression} />
+          </div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <h2 class="sec-t">Apparence &amp; notifications</h2>
+        <div class="sec-body">
+          <div class="field">
+            <span class="label">Couleur de la carte</span>
+            <ColorPicker bind:value={cardColor} />
+          </div>
+          <div class="row toggles">
+            <label class="tg">
+              <Switch bind:checked={notifyPc} />
+              <span>Notif PC</span>
+            </label>
+            <label class="tg">
+              <Switch bind:checked={notifyApp} />
+              <span>Notif app</span>
+            </label>
+          </div>
+          <span class="hint">
+            Les notifs ne s'affichent que si le canal est aussi activé dans Réglages (interrupteur maître).
+          </span>
+        </div>
+      </section>
     </div>
 
     <div class="row actions">
@@ -368,11 +291,38 @@
   .form {
     display: flex;
     flex-direction: column;
-    gap: var(--s4);
-    margin: var(--s4) 0;
+    margin: var(--s3) 0 var(--s2);
+  }
+  .sec {
+    padding: var(--s4) 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .sec:first-child {
+    border-top: none;
+    padding-top: var(--s2);
+  }
+  .sec-t {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-2);
+    margin-bottom: var(--s3);
+  }
+  .sec-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+  .hint {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.45;
   }
   .actions {
     margin-top: var(--s4);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--hairline);
   }
   .toggles {
     gap: var(--s5);
@@ -400,60 +350,4 @@
   .fields-row {
     gap: var(--s4);
   }
-  .chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-  .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 1px 8px;
-    border-radius: var(--r-full);
-    background: var(--bg-2);
-    font-size: 12px;
-  }
-  .chip-x {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    color: var(--text-2);
-    padding: 0 2px;
-  }
-  .chip-x:hover {
-    color: var(--red);
-  }
-  .color-picker {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .color-oval {
-    width: 32px;
-    height: 22px;
-    border-radius: 11px;
-    border: 2px solid var(--border);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--bg-elev);
-    transition: border-color 0.15s, transform 0.1s;
-  }
-  .color-oval:hover {
-    transform: scale(1.1);
-  }
-  .color-oval.selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-  .color-none {
-    font-size: 12px;
-    color: var(--text-2);
-    line-height: 1;
-  }
-
 </style>

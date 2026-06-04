@@ -23,12 +23,28 @@
   const end = $derived(Math.min(total, start + visible));
   const slice = $derived(items.slice(start, end));
 
-  function onScroll() {
-    if (vp) scrollTop = vp.scrollTop;
-  }
+  // Listener scroll passif + coalescé par frame : évite de bloquer le scroll et de
+  // mettre à jour l'état plus d'une fois par frame sur les longues listes (journaux).
+  $effect(() => {
+    const el = vp;
+    if (!el) return;
+    let raf = 0;
+    const handler = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        scrollTop = el.scrollTop;
+      });
+    };
+    el.addEventListener("scroll", handler, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handler);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  });
 </script>
 
-<div class="vlist" bind:this={vp} bind:clientHeight={vh} onscroll={onScroll}>
+<div class="vlist" bind:this={vp} bind:clientHeight={vh}>
   <div class="vspace" style="height:{total * itemHeight}px">
     <div class="vwin" style="transform:translateY({start * itemHeight}px)">
       {#each slice as item, i (start + i)}

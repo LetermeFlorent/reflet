@@ -31,7 +31,7 @@ fn secs_until_schedule(times: &[String]) -> Option<u64> {
             } else {
                 target_min + 1440 - now_min
             };
-            let secs = diff * 60 - now.second() as u64;
+            let secs = (diff * 60).saturating_sub(now.second() as u64);
             best = Some(best.map_or(secs, |b| b.min(secs)));
         }
     }
@@ -44,7 +44,10 @@ fn is_schedule_due(times: &[String]) -> bool {
     for t in times {
         if let Some((h, m)) = parse_hhmm(t) {
             let target_min = h as u64 * 60 + m as u64;
-            if now_min == target_min || (now_min > 0 && now_min - 1 == target_min) {
+            // Fenêtre = minute pile OU minute précédente (avec passage de minuit :
+            // à 00h00, la minute précédente est 23h59 = 1439).
+            let prev_min = if now_min == 0 { 1439 } else { now_min - 1 };
+            if now_min == target_min || prev_min == target_min {
                 let sec = now.second() as u64;
                 if sec < 65 {
                     return true;
@@ -192,21 +195,65 @@ async fn run_pair(app: &AppHandle, id: &str) {
     run_batch(app, vec![pair], settings).await;
 }
 
-/// Exécute une série de paires sur le worker unique : busy ON, chacune marquée
-/// démarrée puis synchronisée, busy OFF. No-op si la liste est vide.
+/// File d'attente à concurrence bornée : chaque paire est dispatchée dans une tâche
+/// détachée, le nombre de synchros simultanées étant limité par `sync_sem`. La boucle
+/// du scheduler reste réactive pendant les synchros. L'anti-overlap (par paire ET par
+/// destination) et la déduplication sont garantis dans `run_pair_task`.
 async fn run_batch(app: &AppHandle, pairs: Vec<SyncPair>, settings: Settings) {
-    if pairs.is_empty() {
-        return;
-    }
-    set_busy(app, true);
     for pair in pairs {
-        app.state::<AppState>().mark_started(&pair.id);
-        run_one(app, pair, settings.clone()).await;
+        let app = app.clone();
+        let settings = settings.clone();
+        spawn(async move {
+            run_pair_task(&app, pair, settings).await;
+        });
     }
-    set_busy(app, false);
 }
 
-async fn run_one(app: &AppHandle, pair: SyncPair, settings: Settings) {
+fn norm_dest(p: &str) -> String {
+    p.replace('/', "\\").trim_end_matches('\\').to_lowercase()
+}
+
+/// Deux destinations se chevauchent si elles sont égales ou que l'une contient l'autre.
+fn dest_overlap(a: &str, b: &str) -> bool {
+    a == b || a.starts_with(&format!("{b}\\")) || b.starts_with(&format!("{a}\\"))
+}
+
+async fn run_pair_task(app: &AppHandle, pair: SyncPair, settings: Settings) {
+    let nd = norm_dest(&pair.destination);
+    {
+        let state = app.state::<AppState>();
+        let mut active = state.active.lock().unwrap();
+        // Déjà en file/en cours pour cette paire → on ne relance pas (dédup + anti-overlap).
+        if active.contains_key(&pair.id) {
+            return;
+        }
+        // Destination en conflit avec une synchro active → on réessaiera au prochain tick.
+        if active.values().any(|d| dest_overlap(d, &nd)) {
+            return;
+        }
+        let was_empty = active.is_empty();
+        active.insert(pair.id.clone(), nd);
+        drop(active);
+        if was_empty {
+            set_busy(app, true);
+        }
+    }
+
+    // Limite la concurrence : attend un jeton si MAX_CONCURRENT_SYNCS sont déjà en cours.
+    let permit = app.state::<AppState>().sync_sem.clone().acquire_owned().await.ok();
+    app.state::<AppState>().mark_started(&pair.id);
+
     let app2 = app.clone();
+    let pid = pair.id.clone();
     let _ = spawn_blocking(move || crate::sync::run_sync(&app2, pair, settings)).await;
+    drop(permit);
+
+    let state = app.state::<AppState>();
+    let mut active = state.active.lock().unwrap();
+    active.remove(&pid);
+    let empty = active.is_empty();
+    drop(active);
+    if empty {
+        set_busy(app, false);
+    }
 }

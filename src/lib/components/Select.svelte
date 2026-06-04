@@ -78,13 +78,16 @@
       if (e.key === "Escape") open = false;
     };
 
-    // Delay to avoid catching the click that opened it
-    requestAnimationFrame(() => {
+    // Delay to avoid catching the click that opened it. On capture le rAF pour
+    // l'annuler si l'effet est nettoyé avant qu'il ne s'exécute (sinon les listeners
+    // seraient ajoutés après le cleanup → fuite à chaque réouverture).
+    const raf = requestAnimationFrame(() => {
       window.addEventListener("mousedown", onDown);
       window.addEventListener("keydown", onKey);
     });
 
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
     };
@@ -147,7 +150,7 @@
     border: 1px solid var(--hairline);
     border-radius: var(--r-control);
     box-shadow: var(--shadow-modal);
-    padding: 4px;
+    padding: 3px;
     z-index: 100;
     animation: pop 0.12s var(--ease);
   }
@@ -167,10 +170,10 @@
     border: none;
     background: transparent;
     color: var(--text);
-    padding: 7px 9px;
-    border-radius: 6px;
+    padding: 4px 9px;
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
   }
   .sel-opt:hover:not(.disabled) {
     background: var(--hover);

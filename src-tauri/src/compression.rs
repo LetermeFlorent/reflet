@@ -13,6 +13,10 @@ pub struct CompressionMethod {
     pub download_url: String,
     pub default_level: u32,
     pub max_level: u32,
+    /// Compression indicative : Aucune / Moyenne / Élevée / Très élevée / Ultra.
+    pub ratio: String,
+    /// true = intégré à l'app (rien à installer) ; false = outil externe.
+    pub builtin: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +25,8 @@ pub struct CompressionConfig {
     pub method: String,
     pub level: u32,
     pub password: Option<String>,
+    #[serde(default)]
+    pub archive_name: String,
 }
 
 impl Default for CompressionConfig {
@@ -29,229 +35,157 @@ impl Default for CompressionConfig {
             method: "off".into(),
             level: 0,
             password: None,
+            archive_name: String::new(),
         }
     }
 }
 
-impl CompressionConfig {
-    pub fn extension(&self) -> &'static str {
-        if self.method == "off" {
-            return "";
-        }
-        method_extension(&self.method)
-    }
-}
-
-fn method_extension(method: &str) -> &'static str {
-    match method {
-        "zip" => ".zip",
-        "7z" => ".7z",
-        "zstd" => ".zst",
-        "gzip" => ".gz",
-        "xz" => ".xz",
-        "lz4" => ".lz4",
-        _ => "",
-    }
-}
-
+/// INVARIANT SÉCURITÉ : `name` doit toujours provenir d'une constante codée en dur
+/// (les ids de `detect_methods` : "zpaq"/"7z"/"rar"/"tar"). Ne JAMAIS passer ici un nom
+/// issu de la config, du réseau ou d'une saisie : ce serait exécuter un binaire arbitraire
+/// du PATH. Si la détection devient un jour dynamique, valider contre une liste blanche.
 fn has_binary(name: &str) -> bool {
-    Command::new(name)
-        .arg("--version")
-        .output()
-        .is_ok()
+    debug_assert!(
+        matches!(name, "zpaq" | "7z" | "rar" | "tar"),
+        "has_binary appelé avec un nom non codé en dur : {name}"
+    );
+    Command::new(name).arg("--help").output().is_ok()
 }
 
-/// Vérifie le code de sortie d'un process ; en cas d'échec, remonte stderr.
-fn check_output(out: &std::process::Output, label: &str) -> Result<(), String> {
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(format!("{label} échec : {}", String::from_utf8_lossy(&out.stderr)))
+/// Formats capables de chiffrer l'archive par mot de passe :
+/// - ZIP intégré (deflate/bzip2/zstd) via AES-256 du conteneur ZIP ;
+/// - 7-Zip et RAR via leur chiffrement natif (AES-256).
+/// tar.* (pas de chiffrement) et zpaq ne gèrent pas de mot de passe.
+pub fn supports_password(id: &str) -> bool {
+    matches!(id, "deflate" | "bzip2" | "zstd" | "7z" | "rar")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn method(
+    id: &str,
+    name: &str,
+    ext: &str,
+    ratio: &str,
+    default_level: u32,
+    max_level: u32,
+    available: bool,
+    builtin: bool,
+    url: &str,
+) -> CompressionMethod {
+    CompressionMethod {
+        id: id.into(),
+        name: name.into(),
+        extension: ext.into(),
+        available,
+        supports_password: supports_password(id),
+        download_url: url.into(),
+        default_level,
+        max_level,
+        ratio: ratio.into(),
+        builtin,
     }
 }
 
-fn has_powershell_zip() -> bool {
-    #[cfg(windows)]
-    {
-        let out = Command::new("powershell")
-            .args(["-NoProfile", "-Command", "& {Get-Command Compress-Archive -ErrorAction SilentlyContinue}"])
-            .output();
-        out.map(|o| o.status.success()).unwrap_or(false)
-    }
-    #[cfg(not(windows))]
-    false
-}
-
-/// Detect available compression methods on the current system.
-/// Returns ALL known methods with their availability flag.
+/// Codecs internes du ZIP (toujours dispo, mise à jour incrémentale) + formats
+/// externes (reconstruction complète, nécessitent l'outil installé).
 pub fn detect_methods() -> Vec<CompressionMethod> {
-    let mut methods: Vec<CompressionMethod> = Vec::new();
-
-    let zip_avail = has_powershell_zip();
-    let has_7z = has_binary("7z");
-    methods.push(CompressionMethod {
-        id: "zip".into(),
-        name: if cfg!(windows) { "ZIP (PowerShell)" } else { "ZIP (7z)" }.into(),
-        extension: ".zip".into(),
-        available: zip_avail || has_7z,
-        supports_password: has_7z,
-        download_url: "https://www.7-zip.org/download.html".into(),
-        default_level: 5,
-        max_level: 9,
-    });
-
-    methods.push(CompressionMethod {
-        id: "7z".into(),
-        name: "7-Zip".into(),
-        extension: ".7z".into(),
-        available: has_7z,
-        supports_password: true,
-        download_url: "https://www.7-zip.org/download.html".into(),
-        default_level: 5,
-        max_level: 9,
-    });
-
-    let has_zstd = has_binary("zstd");
-    methods.push(CompressionMethod {
-        id: "zstd".into(),
-        name: "Zstandard (zstd)".into(),
-        extension: ".zst".into(),
-        available: has_zstd,
-        supports_password: false,
-        download_url: "https://github.com/facebook/zstd/releases".into(),
-        default_level: 3,
-        max_level: 19,
-    });
-
-    let has_gzip = has_binary("gzip");
-    methods.push(CompressionMethod {
-        id: "gzip".into(),
-        name: "Gzip".into(),
-        extension: ".gz".into(),
-        available: has_gzip,
-        supports_password: false,
-        download_url: "https://www.gnu.org/software/gzip/".into(),
-        default_level: 6,
-        max_level: 9,
-    });
-
-    let has_xz = has_binary("xz");
-    methods.push(CompressionMethod {
-        id: "xz".into(),
-        name: "XZ".into(),
-        extension: ".xz".into(),
-        available: has_xz,
-        supports_password: false,
-        download_url: "https://tukaani.org/xz/".into(),
-        default_level: 6,
-        max_level: 9,
-    });
-
-    let has_lz4 = has_binary("lz4");
-    methods.push(CompressionMethod {
-        id: "lz4".into(),
-        name: "LZ4".into(),
-        extension: ".lz4".into(),
-        available: has_lz4,
-        supports_password: false,
-        download_url: "https://lz4.github.io/lz4/".into(),
-        default_level: 1,
-        max_level: 12,
-    });
-
-    methods
+    let tar = has_binary("tar");
+    // Ordonné de la compression la plus forte à la plus légère.
+    vec![
+        method("zpaq", "zpaq (.zpaq, maximum absolu)", ".zpaq", "Maximum", 5, 5, has_binary("zpaq"), false, "http://mattmahoney.net/dc/zpaq.html"),
+        method("7z", "7-Zip (.7z)", ".7z", "Ultra", 5, 9, has_binary("7z"), false, "https://www.7-zip.org/download.html"),
+        method("tar.xz", "tar + XZ (.tar.xz)", ".tar.xz", "Ultra", 0, 0, tar, false, "https://tukaani.org/xz/"),
+        method("rar", "WinRAR (.rar)", ".rar", "Ultra", 3, 5, has_binary("rar"), false, "https://www.win-rar.com/download.html"),
+        method("zstd", "Zstandard (ZIP intégré)", ".zip", "Très élevée", 10, 22, true, true, ""),
+        method("tar.zst", "tar + Zstandard (.tar.zst)", ".tar.zst", "Très élevée", 0, 0, tar, false, "https://github.com/facebook/zstd/releases"),
+        method("bzip2", "Bzip2 (ZIP intégré)", ".zip", "Élevée", 9, 9, true, true, ""),
+        method("tar.bz2", "tar + Bzip2 (.tar.bz2)", ".tar.bz2", "Élevée", 0, 0, tar, false, "https://www.gnu.org/software/tar/"),
+        method("deflate", "Deflate (ZIP intégré)", ".zip", "Moyenne", 6, 9, true, true, ""),
+        method("tar.gz", "tar + Gzip (.tar.gz)", ".tar.gz", "Moyenne", 0, 0, tar, false, "https://www.gnu.org/software/tar/"),
+        method("tar.lz4", "tar + LZ4 (.tar.lz4, rapide)", ".tar.lz4", "Faible", 0, 0, tar, false, "https://github.com/lz4/lz4/releases"),
+    ]
 }
 
-pub fn compress_file(src: &Path, dst: &Path, method: &str, level: u32, password: Option<&str>) -> Result<(), String> {
+/// Codec interne au conteneur ZIP (chemin incrémental en Rust).
+pub fn is_builtin(method: &str) -> bool {
+    matches!(method, "deflate" | "bzip2" | "zstd")
+}
+
+pub fn archive_extension(method: &str) -> &'static str {
     match method {
-        "zip" => compress_zip(src, dst, level, password),
-        "7z" => compress_7z(src, dst, level, password),
-        "zstd" => compress_zstd(src, dst, level),
-        "gzip" => compress_stream("gzip", src, dst, level),
-        "xz" => compress_stream("xz", src, dst, level),
-        "lz4" => compress_stream("lz4", src, dst, level),
-        _ => Err(format!("Méthode de compression inconnue : {method}")),
+        "zpaq" => ".zpaq",
+        "7z" => ".7z",
+        "rar" => ".rar",
+        "tar.zst" => ".tar.zst",
+        "tar.xz" => ".tar.xz",
+        "tar.gz" => ".tar.gz",
+        "tar.bz2" => ".tar.bz2",
+        "tar.lz4" => ".tar.lz4",
+        _ => ".zip",
     }
 }
 
-fn compress_zip(src: &Path, dst: &Path, level: u32, password: Option<&str>) -> Result<(), String> {
-    if let Some(pw) = password {
-        return compress_7z(src, dst, level, Some(pw));
+/// Construit une archive complète via un outil externe (full rebuild).
+/// `src_dir` = dossier source, `out` = fichier archive à écrire.
+/// `password` (si Some et non vide) chiffre l'archive pour les formats qui le
+/// gèrent (7-Zip : `-p` + `-mhe=on` pour chiffrer aussi les noms ; RAR : `-hp`).
+/// Note sécurité : le mot de passe est passé en argument de la commande, donc
+/// brièvement visible dans la liste des processus (limite des outils externes).
+pub fn build_external(
+    method: &str,
+    level: u32,
+    password: Option<&str>,
+    src_dir: &Path,
+    out: &Path,
+) -> Result<(), String> {
+    let src = src_dir.to_string_lossy().to_string();
+    let outp = out.to_string_lossy().to_string();
+    let glob = format!("{src}\\*");
+    let pwd = password.map(str::trim).filter(|p| !p.is_empty());
+    let result = match method {
+        "zpaq" => Command::new("zpaq")
+            .args(["a", &outp, &glob, &format!("-m{}", level.clamp(1, 5))])
+            .output(),
+        "7z" => {
+            let mut args = vec![
+                "a".to_string(),
+                "-t7z".to_string(),
+                format!("-mx={}", level.clamp(1, 9)),
+                "-y".to_string(),
+            ];
+            if let Some(p) = pwd {
+                args.push(format!("-p{p}"));
+                args.push("-mhe=on".to_string());
+            }
+            args.push(outp.clone());
+            args.push(glob.clone());
+            Command::new("7z").args(&args).output()
+        }
+        "rar" => {
+            let mut args = vec![
+                "a".to_string(),
+                "-r".to_string(),
+                "-ep1".to_string(),
+                format!("-m{}", level.clamp(0, 5)),
+                "-y".to_string(),
+            ];
+            if let Some(p) = pwd {
+                args.push(format!("-hp{p}"));
+            }
+            args.push(outp.clone());
+            args.push(glob.clone());
+            Command::new("rar").args(&args).output()
+        }
+        "tar.zst" => Command::new("tar").args(["--zstd", "-cf", &outp, "-C", &src, "."]).output(),
+        "tar.xz" => Command::new("tar").args(["-cJf", &outp, "-C", &src, "."]).output(),
+        "tar.gz" => Command::new("tar").args(["-czf", &outp, "-C", &src, "."]).output(),
+        "tar.bz2" => Command::new("tar").args(["-cjf", &outp, "-C", &src, "."]).output(),
+        "tar.lz4" => Command::new("tar").args(["--lz4", "-cf", &outp, "-C", &src, "."]).output(),
+        _ => return Err(format!("format externe inconnu : {method}")),
+    };
+    match result {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => Err(format!("{method} : {}", String::from_utf8_lossy(&o.stderr).trim())),
+        Err(e) => Err(format!("outil « {method} » introuvable : {e}")),
     }
-    if cfg!(windows) {
-        // Compress-Archive n'accepte que des paliers nommes.
-        let ps_level = match level {
-            0 => "NoCompression",
-            1..=3 => "Fastest",
-            _ => "Optimal",
-        };
-        let src_str = src.to_string_lossy();
-        let dst_str = dst.to_string_lossy();
-        let ps_script = format!(
-            "Compress-Archive -LiteralPath '{}' -DestinationPath '{}' -CompressionLevel {} -Force",
-            src_str.replace('\'', "''"),
-            dst_str.replace('\'', "''"),
-            ps_level
-        );
-        let out = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &ps_script])
-            .output()
-            .map_err(|e| format!("Échec PowerShell : {e}"))?;
-        check_output(&out, "Compress-Archive")
-    } else {
-        compress_7z(src, dst, level, None)
-    }
-}
-
-fn compress_7z(src: &Path, dst: &Path, level: u32, password: Option<&str>) -> Result<(), String> {
-    let src_str = src.to_string_lossy().to_string();
-    let dst_str = dst.to_string_lossy().to_string();
-    let mut args = vec!["a".to_string(), "-t7z".to_string(), format!("-mx={}", level), "-y".to_string()];
-    if let Some(pw) = password {
-        args.push(format!("-p{pw}"));
-    }
-    args.push(dst_str);
-    args.push(src_str);
-
-    let out = Command::new("7z")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("7z introuvable : {e}"))?;
-    check_output(&out, "7z")
-}
-
-fn compress_zstd(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
-    let src_str = src.to_string_lossy().to_string();
-    let dst_str = dst.to_string_lossy().to_string();
-    let out = Command::new("zstd")
-        .args([format!("-{level}"), "-f".to_string(), "-o".to_string(), dst_str, src_str])
-        .output()
-        .map_err(|e| format!("zstd introuvable : {e}"))?;
-    check_output(&out, "zstd")
-}
-
-/// Outils filtre type `cmd -<level> -c <src> > dst` (gzip, xz, lz4) : on redirige
-/// stdout directement vers le fichier de sortie (streaming, aucun buffer en RAM).
-fn compress_stream(cmd: &str, src: &Path, dst: &Path, level: u32) -> Result<(), String> {
-    let file = std::fs::File::create(dst)
-        .map_err(|e| format!("Création {} échec : {e}", dst.display()))?;
-    let child = Command::new(cmd)
-        .arg(format!("-{level}"))
-        .arg("-c")
-        .arg(src)
-        .stdout(std::process::Stdio::from(file))
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("{cmd} introuvable : {e}"))?;
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("{cmd} échec : {e}"))?;
-    check_output(&out, cmd)
-}
-
-/// Copy mtime from source to destination file for change detection purposes.
-pub fn copy_mtime(src: &Path, dst: &Path) -> Result<(), String> {
-    let md = std::fs::metadata(src).map_err(|e| format!("mtime src : {e}"))?;
-    let mtime = filetime::FileTime::from_last_modification_time(&md);
-    filetime::set_file_mtime(dst, mtime).map_err(|e| format!("mtime dst : {e}"))
 }

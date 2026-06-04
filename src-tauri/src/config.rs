@@ -48,6 +48,8 @@ pub struct SyncPair {
     #[serde(default)]
     pub compression: CompressionConfig,
     #[serde(default)]
+    pub backup_mode: bool,
+    #[serde(default)]
     pub last_run: Option<LastRun>,
 }
 
@@ -70,6 +72,14 @@ pub struct Settings {
     pub notify_app: bool,
     #[serde(default = "default_true")]
     pub compact_cards: bool,
+    #[serde(default = "default_off_method")]
+    pub default_compression_method: String,
+    #[serde(default)]
+    pub default_compression_level: u32,
+}
+
+fn default_off_method() -> String {
+    "off".into()
 }
 
 impl Default for Settings {
@@ -85,6 +95,7 @@ impl Default for Settings {
                 "**/*.tmp".into(),
                 "**/~$*".into(),
                 "**/Thumbs.db".into(),
+                "**/desktop.ini".into(),
             ],
             verify_by_content: "off".into(),
             mtime_tolerance_sec: 2,
@@ -93,6 +104,8 @@ impl Default for Settings {
             notify_pc: false,
             notify_app: false,
             compact_cards: true,
+            default_compression_method: "off".into(),
+            default_compression_level: 0,
         }
     }
 }
@@ -113,15 +126,39 @@ pub fn config_path(app: &AppHandle) -> PathBuf {
     dir.join("settings.json")
 }
 
+/// Ramène les anciens ids de méthode de compression (zip, gzip, xz, lz4, store…)
+/// vers un id actuellement reconnu (repli sur deflate). Les formats externes
+/// (7z, rar, tar.*, zpaq) sont conservés : ils sont sélectionnables et gérés par
+/// le moteur (reconstruction complète), donc ne doivent plus être écrasés.
+fn normalize_compression(cfg: &mut Config) {
+    let valid = [
+        "off", "deflate", "bzip2", "zstd", "7z", "rar", "zpaq",
+        "tar.xz", "tar.zst", "tar.gz", "tar.bz2", "tar.lz4",
+    ];
+    let fix = |m: &mut String| {
+        if !valid.contains(&m.as_str()) {
+            *m = "deflate".into();
+        }
+    };
+    fix(&mut cfg.settings.default_compression_method);
+    for p in &mut cfg.pairs {
+        fix(&mut p.compression.method);
+    }
+}
+
 pub fn load(app: &AppHandle) -> Config {
     let path = config_path(app);
     match std::fs::read_to_string(&path) {
-        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
-            tracing::error!(
-                "settings.json corrompu ({e}) — valeurs par défaut (sera écrasé au prochain enregistrement)"
-            );
-            Config::default()
-        }),
+        Ok(s) => {
+            let mut cfg: Config = serde_json::from_str(&s).unwrap_or_else(|e| {
+                tracing::error!(
+                    "settings.json corrompu ({e}) — valeurs par défaut (sera écrasé au prochain enregistrement)"
+                );
+                Config::default()
+            });
+            normalize_compression(&mut cfg);
+            cfg
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config::default(),
         Err(e) => {
             tracing::error!(

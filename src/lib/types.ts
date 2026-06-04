@@ -23,6 +23,7 @@ export interface SyncPair {
   maxFileSize: number;
   color: string;
   compression: CompressionConfig;
+  backupMode: boolean;
   lastRun?: LastRun | null;
   status: string;
   nextRunSec?: number | null;
@@ -43,6 +44,7 @@ export interface NewPair {
   maxFileSize: number;
   color: string;
   compression: CompressionConfig;
+  backupMode: boolean;
 }
 
 export interface Settings {
@@ -59,6 +61,8 @@ export interface Settings {
   notifyPc: boolean;
   notifyApp: boolean;
   compactCards: boolean;
+  defaultCompressionMethod: string;
+  defaultCompressionLevel: number;
 }
 
 export interface AppStateDto {
@@ -94,12 +98,15 @@ export interface CompressionMethod {
   downloadUrl: string;
   defaultLevel: number;
   maxLevel: number;
+  ratio: string;
+  builtin: boolean;
 }
 
 export interface CompressionConfig {
   method: string;
   level: number;
   password: string | null;
+  archiveName: string;
 }
 
 export interface LogEntry {

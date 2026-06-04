@@ -53,7 +53,7 @@ pub fn run() {
             {
                 let state = handle.state::<AppState>();
                 *state.sync_tx.lock().unwrap() = Some(tx.clone());
-                let mut wm = WatcherManager::new(tx);
+                let mut wm = WatcherManager::new(tx, state.sync_busy.clone());
                 let cfg = state.config.lock().unwrap();
                 for p in &cfg.pairs {
                     if p.enabled && p.watch_realtime {
@@ -110,7 +110,8 @@ pub fn run() {
             commands::show_window,
             commands::hide_window,
             commands::quit_app,
-            commands::detect_compression_methods
+            commands::detect_compression_methods,
+            commands::open_url
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

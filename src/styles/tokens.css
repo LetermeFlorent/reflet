@@ -43,6 +43,16 @@
   --color-jaune-bg: #fef7e0;
   --color-rouge-bg: #fce8e8;
 
+  /* Teintes vives pour le halo de bord des cartes (memes en clair/sombre) */
+  --color-bleu-glow: #4a90e2;
+  --color-vert-glow: #2eae4e;
+  --color-orange-glow: #f5a623;
+  --color-rose-glow: #e0608f;
+  --color-violet-glow: #9b6dd6;
+  --color-teal-glow: #1aa89c;
+  --color-jaune-glow: #e8c33a;
+  --color-rouge-glow: #e5484d;
+
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 

@@ -17,7 +17,9 @@
   ];
 
   let local = $state<Settings | null>(null);
-  let saving = $state(false);
+  let pending = $state(false);
+  let lastSent = "";
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   $effect(() => {
     if (store.settings && !local) {
@@ -25,28 +27,35 @@
     }
   });
 
-  async function save() {
+  $effect(() => {
     if (!local) return;
-    saving = true;
-    try {
-      await api.updateSettings($state.snapshot(local));
-      store.toast("success", "Réglages enregistrés");
-      await store.refresh();
-    } catch (e) {
-      store.toast("error", String(e));
-    } finally {
-      saving = false;
+    const snap = JSON.stringify(local);
+    if (lastSent === "") {
+      lastSent = snap;
+      return;
     }
-  }
+    if (snap === lastSent) return;
+    lastSent = snap;
+    pending = true;
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      try {
+        await api.updateSettings(JSON.parse(snap) as Settings);
+        await store.refresh();
+      } catch (e) {
+        store.toast("error", String(e));
+      } finally {
+        pending = false;
+      }
+    }, 400);
+  });
 </script>
 
 <div class="page-scroll">
 <header class="page-head">
   <h1>Réglages</h1>
   <div class="spacer"></div>
-  <button class="btn" onclick={save} disabled={saving || !local}>
-    {saving ? "Enregistrement…" : "Enregistrer"}
-  </button>
+  <span class="savestate muted">{pending ? "Enregistrement…" : "✓ Enregistré automatiquement"}</span>
 </header>
 
 {#if !local}
@@ -222,17 +231,11 @@
   .info .muted {
     font-size: 12px;
   }
-  .presets {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-    flex-wrap: wrap;
+  .savestate {
+    font-size: 13px;
   }
   .num {
     width: 72px;
-  }
-  .sel {
-    width: 200px;
   }
   .danger-note {
     padding: var(--s2) var(--s3);

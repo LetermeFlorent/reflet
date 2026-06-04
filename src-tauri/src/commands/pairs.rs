@@ -1,143 +1,9 @@
-
-use crate::compression::{self, CompressionMethod};
-use crate::config::{self, Settings, SyncPair};
-use crate::state::{AppState, LogEntry, SyncRequest};
-use crate::sync::{self, SyncPlan};
+use super::{notify_state_changed, persist_and_notify, reconcile_watcher};
+use crate::config::{self, SyncPair};
+use crate::state::AppState;
+use crate::sync;
 use serde::Deserialize;
-use std::sync::atomic::Ordering;
-use tauri::{AppHandle, Emitter, Manager, State};
-
-
-fn persist(app: &AppHandle, state: &AppState) -> Result<(), String> {
-    let snapshot = state.config.lock().unwrap().clone();
-    config::save(app, &snapshot)
-}
-
-fn notify_state_changed(app: &AppHandle) {
-    let _ = app.emit("state:changed", serde_json::json!({}));
-}
-
-fn persist_and_notify(app: &AppHandle, state: &AppState) -> Result<(), String> {
-    persist(app, state)?;
-    notify_state_changed(app);
-    Ok(())
-}
-
-/// Démarre ou arrête le watcher temps-réel d'une paire selon (enabled && watch).
-fn reconcile_watcher(state: &AppState, id: &str, enabled: bool, watch: bool, source: Option<&str>) {
-    if let Some(wm) = state.watcher_manager.lock().unwrap().as_mut() {
-        if enabled && watch {
-            if let Some(src) = source {
-                wm.start(id, src);
-            }
-        } else {
-            wm.stop(id);
-        }
-    }
-}
-
-pub fn apply_autostart(app: &AppHandle, enable: bool) {
-    #[cfg(desktop)]
-    {
-        use tauri_plugin_autostart::ManagerExt;
-        let mgr = app.autolaunch();
-        let _ = if enable { mgr.enable() } else { mgr.disable() };
-    }
-    #[cfg(not(desktop))]
-    let _ = (app, enable);
-}
-
-fn send_request(state: &AppState, req: SyncRequest) -> Result<(), String> {
-    let guard = state.sync_tx.lock().unwrap();
-    match guard.as_ref() {
-        Some(tx) => tx.try_send(req).map_err(|e| e.to_string()),
-        None => Err("worker de synchronisation non démarré".into()),
-    }
-}
-
-pub fn trigger_all(app: &AppHandle) {
-    let state = app.state::<AppState>();
-    let _ = send_request(&state, SyncRequest::All);
-}
-
-
-#[tauri::command]
-pub fn get_app_state(state: State<AppState>) -> serde_json::Value {
-    let cfg = state.config.lock().unwrap();
-    let statuses = state.statuses.lock().unwrap();
-    let last_started = state.last_started.lock().unwrap();
-    let scheduler_running = state.scheduler_running.load(Ordering::SeqCst);
-    let now = std::time::Instant::now();
-    let pairs: Vec<serde_json::Value> = cfg
-        .pairs
-        .iter()
-        .map(|p| {
-            let st = if !p.enabled {
-                "disabled".to_string()
-            } else {
-                statuses.get(&p.id).cloned().unwrap_or_else(|| "idle".into())
-            };
-            let next_run_sec: Option<u64> = if p.enabled && scheduler_running {
-                let iv = crate::scheduler::pair_interval(p, &cfg.settings);
-                let elapsed = last_started
-                    .get(&p.id)
-                    .map(|t| now.duration_since(*t).as_secs())
-                    .unwrap_or(0);
-                Some(iv.saturating_sub(elapsed))
-            } else {
-                None
-            };
-            let mut v = serde_json::to_value(p).unwrap_or(serde_json::Value::Null);
-            if let Some(obj) = v.as_object_mut() {
-                obj.insert("status".into(), serde_json::Value::String(st));
-                obj.insert(
-                    "nextRunSec".into(),
-                    match next_run_sec {
-                        Some(s) => serde_json::Value::from(s),
-                        None => serde_json::Value::Null,
-                    },
-                );
-            }
-            v
-        })
-        .collect();
-    serde_json::json!({
-        "settings": cfg.settings,
-        "pairs": pairs,
-        "schedulerRunning": scheduler_running,
-        "syncBusy": state.sync_busy.load(Ordering::SeqCst),
-    })
-}
-
-
-#[tauri::command]
-pub fn get_settings(state: State<AppState>) -> Settings {
-    state.config.lock().unwrap().settings.clone()
-}
-
-#[tauri::command]
-pub fn update_settings(app: AppHandle, state: State<AppState>, settings: Settings) -> Result<(), String> {
-    {
-        let mut cfg = state.config.lock().unwrap();
-        cfg.settings = settings.clone();
-    }
-    state
-        .scheduler_running
-        .store(settings.scheduler_running, Ordering::SeqCst);
-    apply_autostart(&app, settings.autostart);
-    persist_and_notify(&app, &state)
-}
-
-#[tauri::command]
-pub fn set_scheduler_running(app: AppHandle, state: State<AppState>, running: bool) -> Result<(), String> {
-    state.scheduler_running.store(running, Ordering::SeqCst);
-    {
-        let mut cfg = state.config.lock().unwrap();
-        cfg.settings.scheduler_running = running;
-    }
-    persist_and_notify(&app, &state)
-}
-
+use tauri::{AppHandle, State};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -167,10 +33,23 @@ pub struct NewPair {
     pub color: String,
     #[serde(default)]
     pub compression: crate::compression::CompressionConfig,
+    #[serde(default)]
+    pub backup_mode: bool,
 }
 
 fn default_true() -> bool {
     true
+}
+
+/// Empêche deux paires en mode archive de viser le même fichier .zip (elles
+/// s'effaceraient mutuellement au nettoyage). Retourne le nom de la paire en conflit.
+fn archive_conflict(state: &AppState, self_id: &str, pair: &SyncPair) -> Option<String> {
+    let target = sync::archive_target(pair)?;
+    let cfg = state.config.lock().unwrap();
+    cfg.pairs
+        .iter()
+        .find(|p| p.id != self_id && sync::archive_target(p).as_deref() == Some(target.as_path()))
+        .map(|p| p.name.clone())
 }
 
 #[tauri::command]
@@ -205,8 +84,14 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
         max_file_size: new.max_file_size,
         color: new.color.clone(),
         compression: new.compression,
+        backup_mode: new.backup_mode,
         last_run: None,
     };
+    if let Some(other) = archive_conflict(&state, &id, &pair) {
+        return Err(format!(
+            "Conflit d'archive avec « {other} » (même fichier .zip de destination). Change le nom de l'archive ou la destination."
+        ));
+    }
     let source = pair.source.clone();
     state.config.lock().unwrap().pairs.push(pair);
     reconcile_watcher(&state, &id, enabled, watch_realtime, Some(&source));
@@ -218,6 +103,11 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
 pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Result<(), String> {
     if sync::paths_overlap(&pair.source, &pair.destination) {
         return Err("Source et destination imbriquées (interdit)".into());
+    }
+    if let Some(other) = archive_conflict(&state, &pair.id, &pair) {
+        return Err(format!(
+            "Conflit d'archive avec « {other} » (même fichier .zip de destination). Change le nom de l'archive ou la destination."
+        ));
     }
     let old_source: Option<String>;
     let old_enabled: bool;
@@ -247,6 +137,7 @@ pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Re
                 existing.max_file_size = pair.max_file_size;
                 existing.color = pair.color;
                 existing.compression = pair.compression;
+                existing.backup_mode = pair.backup_mode;
             }
             None => return Err("Paire introuvable".into()),
         }
@@ -341,72 +232,4 @@ pub fn reorder_pairs(app: AppHandle, state: State<AppState>, ordered_ids: Vec<St
     config::save(&app, &snapshot)?;
     notify_state_changed(&app);
     Ok(())
-}
-
-
-#[tauri::command]
-pub fn sync_now(state: State<AppState>, id: String) -> Result<(), String> {
-    send_request(&state, SyncRequest::Pair(id))
-}
-
-#[tauri::command]
-pub fn sync_all(state: State<AppState>) -> Result<(), String> {
-    send_request(&state, SyncRequest::All)
-}
-
-#[tauri::command]
-pub async fn dry_run(state: State<'_, AppState>, id: String) -> Result<SyncPlan, String> {
-    let (pair, settings) = {
-        let cfg = state.config.lock().unwrap();
-        let pair = cfg
-            .pairs
-            .iter()
-            .find(|p| p.id == id)
-            .cloned()
-            .ok_or_else(|| "Paire introuvable".to_string())?;
-        (pair, cfg.settings.clone())
-    };
-    tauri::async_runtime::spawn_blocking(move || sync::dry_run(&pair, &settings))
-        .await
-        .map_err(|e| e.to_string())?
-}
-
-
-#[tauri::command]
-pub fn get_logs(state: State<AppState>) -> Vec<LogEntry> {
-    state.logs.lock().unwrap().iter().cloned().collect()
-}
-
-#[tauri::command]
-pub fn clear_logs(state: State<AppState>) {
-    state.logs.lock().unwrap().clear();
-}
-
-
-#[tauri::command]
-pub fn show_window(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.unminimize();
-        let _ = w.set_focus();
-    }
-}
-
-#[tauri::command]
-pub fn hide_window(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.hide();
-    }
-}
-
-#[tauri::command]
-pub fn quit_app(app: AppHandle) {
-    let state = app.state::<AppState>();
-    state.really_quit.store(true, Ordering::SeqCst);
-    app.exit(0);
-}
-
-#[tauri::command]
-pub fn detect_compression_methods() -> Vec<CompressionMethod> {
-    compression::detect_methods()
 }

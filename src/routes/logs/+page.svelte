@@ -28,6 +28,22 @@
     return () => un?.();
   });
 
+  async function copyLogs() {
+    const text = filtered
+      .map((l) => {
+        const pair = store.pairName(l.pairId);
+        const path = l.path ? ` · ${l.path}` : "";
+        return `${formatDate(l.at)}\t${l.level}\t${l.action}\t${pair ? pair + "\t" : ""}${l.message}${path}`;
+      })
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      store.toast("success", `${filtered.length} ligne(s) copiée(s)`);
+    } catch (e) {
+      store.toast("error", "Copie impossible : " + String(e));
+    }
+  }
+
   async function clear() {
     const ok = await confirmCtl.ask("Vider le journal ?", {
       title: "Vider le journal",
@@ -61,6 +77,7 @@
     <h1>Journal</h1>
     <div class="spacer"></div>
     <Select bind:value={filter} options={filterOptions} width="170px" />
+    <button class="btn btn-sm" onclick={copyLogs} disabled={filtered.length === 0}>Copier</button>
     <button class="btn btn-sm" onclick={reload}>Rafraîchir</button>
     <button class="btn btn-sm btn-danger" onclick={clear}>Vider</button>
   </header>

@@ -1,5 +1,5 @@
 import { api, listen, type UnlistenFn } from "./ipc";
-import type { Settings, SyncPair } from "./types";
+import type { CompressionMethod, Settings, SyncPair } from "./types";
 
 export interface Toast {
   id: number;
@@ -39,8 +39,28 @@ class Store {
   toasts = $state<Toast[]>([]);
   loaded = $state(false);
   rev = $state(0);
+  compressionMethods = $state<CompressionMethod[]>([]);
 
   private toastSeq = 1;
+  private toastTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+  async loadCompressionMethods() {
+    try {
+      this.compressionMethods = await api.detectCompressionMethods();
+    } catch {
+      // détection best-effort, silencieux
+    }
+  }
+
+  /** Coalesce les rafales d'événements (state:changed, sync:finished…) en un seul refetch. */
+  scheduleRefresh() {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setTimeout(() => {
+      this.refreshTimer = null;
+      this.refresh();
+    }, 40);
+  }
 
   async refresh() {
     const s = await api.getAppState();
@@ -72,10 +92,16 @@ class Store {
   toast(kind: Toast["kind"], message: string) {
     const id = this.toastSeq++;
     this.toasts = [...this.toasts, { id, kind, message }];
-    setTimeout(() => this.dismiss(id), kind === "error" ? 7000 : 3500);
+    const timer = setTimeout(() => this.dismiss(id), kind === "error" ? 7000 : 3500);
+    this.toastTimers.set(id, timer);
   }
 
   dismiss(id: number) {
+    const timer = this.toastTimers.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      this.toastTimers.delete(id);
+    }
     this.toasts = this.toasts.filter((t) => t.id !== id);
   }
 
@@ -87,7 +113,7 @@ class Store {
   async initListeners(): Promise<UnlistenFn> {
     const unlisten: UnlistenFn[] = [];
 
-    unlisten.push(await listen("state:changed", () => this.refresh()));
+    unlisten.push(await listen("state:changed", () => this.scheduleRefresh()));
 
     unlisten.push(
       await listen<{ busy: boolean }>("sync:busy", (e) => {
@@ -123,7 +149,7 @@ class Store {
             this.toast("error", `${p.name} : terminé avec erreurs`);
           }
         }
-        this.refresh();
+        this.scheduleRefresh();
       }),
     );
 

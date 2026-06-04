@@ -27,6 +27,7 @@ export const api = {
   getLogs: () => invoke<LogEntry[]>("get_logs"),
   clearLogs: () => invoke<void>("clear_logs"),
   detectCompressionMethods: () => invoke<CompressionMethod[]>("detect_compression_methods"),
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
 
   showWindow: () => invoke<void>("show_window"),
   hideWindow: () => invoke<void>("hide_window"),

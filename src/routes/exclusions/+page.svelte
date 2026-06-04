@@ -5,6 +5,7 @@
 
   const patterns = $derived(store.settings?.ignorePatterns ?? []);
   let busy = $state(false);
+  let mgr = $state<{ openAdd: () => void } | undefined>(undefined);
 
   async function persist(next: string[]) {
     if (!store.settings) return;
@@ -33,18 +34,25 @@
 </script>
 
 <div class="page-scroll">
-  <header class="page-head"><h1>Exclusions globales</h1></header>
+  <header class="page-head">
+    <h1>Exclusions globales</h1>
+    <div class="spacer"></div>
+    <button class="btn" onclick={() => mgr?.openAdd()} disabled={busy}>+ Ajouter</button>
+  </header>
   <p class="muted sub">
     Motifs appliqués à toutes les paires. Les dossiers et fichiers correspondants ne sont jamais
     copiés vers la destination ni supprimés. Chaque paire peut aussi avoir ses propres exclusions
     (dans « Modifier la paire »).
   </p>
 
-  <ExclusionsManager {patterns} {onAdd} {onReplace} {onRemove} {busy} />
+  <ExclusionsManager bind:this={mgr} {patterns} {onAdd} {onReplace} {onRemove} {busy} showAddButton={false} />
 </div>
 
 <style>
   .page-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
     margin-bottom: var(--s2);
   }
   .sub {
