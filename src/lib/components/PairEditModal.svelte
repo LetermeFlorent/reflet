@@ -7,6 +7,7 @@
   import IntervalPicker from "./IntervalPicker.svelte";
   import ExclusionsManager from "./ExclusionsManager.svelte";
   import { formatInterval } from "$lib/format";
+  import { onMount } from "svelte";
 
   let {
     pair,
@@ -45,9 +46,20 @@
       // silencieux
     }
   }
-  $effect(() => {
-    loadMethods();
-  });
+  onMount(loadMethods);
+
+  const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+  function addScheduleTime() {
+    const t = scheduleInput.trim();
+    if (TIME_RE.test(t) && !scheduleTimes.includes(t)) {
+      scheduleTimes = [...scheduleTimes, t];
+    }
+    scheduleInput = "";
+  }
+  function removeScheduleTime(i: number) {
+    scheduleTimes = scheduleTimes.filter((_, j) => j !== i);
+  }
+  const scheduleInputValid = $derived(TIME_RE.test(scheduleInput.trim()));
 
   const selectedMethodMeta = $derived(availableMethods.find(m => m.id === compMethod));
   const compLevelMax = $derived(selectedMethodMeta?.maxLevel ?? 0);
@@ -130,7 +142,9 @@
     saving = true;
     const ignorePatterns = $state.snapshot(ignoreList);
     const intervalSecOverride = intervalSec;
-    const times = $state.snapshot(scheduleTimes).filter(t => /^\d{2}:\d{2}$/.test(t));
+    const times = $state.snapshot(scheduleTimes).filter((t) => TIME_RE.test(t));
+    const minSize = Math.max(0, Math.trunc(minFileSize || 0));
+    const maxSize = Math.max(0, Math.trunc(maxFileSize || 0));
     const compression: CompressionConfig = {
       method: compMethod,
       level: compMethod === "off" ? 0 : (compLevel || compLevelDefault),
@@ -150,8 +164,8 @@
           ignorePatterns,
           watchRealtime,
           scheduleTimes: times,
-          minFileSize,
-          maxFileSize,
+          minFileSize: minSize,
+          maxFileSize: maxSize,
           color: cardColor,
           compression,
         });
@@ -167,8 +181,8 @@
           ignorePatterns,
           watchRealtime,
           scheduleTimes: times,
-          minFileSize,
-          maxFileSize,
+          minFileSize: minSize,
+          maxFileSize: maxSize,
           color: cardColor,
           compression,
         });
@@ -242,15 +256,15 @@
       <div class="field">
         <span class="label">Planification avancée (horaires spécifiques)</span>
         <div class="row">
-          <input class="input" style="width:100px" placeholder="HH:MM" bind:value={scheduleInput} onkeydown={(e) => { if (e.key === 'Enter' && /^\d{2}:\d{2}$/.test(scheduleInput)) { scheduleTimes = [...scheduleTimes, scheduleInput]; scheduleInput = ''; } }} />
-          <button class="btn btn-sm" onclick={() => { if (/^\d{2}:\d{2}$/.test(scheduleInput)) { scheduleTimes = [...scheduleTimes, scheduleInput]; scheduleInput = ''; } }} disabled={!/^\d{2}:\d{2}$/.test(scheduleInput)}>Ajouter</button>
+          <input class="input" style="width:100px" placeholder="HH:MM" bind:value={scheduleInput} onkeydown={(e) => e.key === 'Enter' && addScheduleTime()} />
+          <button class="btn btn-sm" onclick={addScheduleTime} disabled={!scheduleInputValid}>Ajouter</button>
         </div>
         {#if scheduleTimes.length > 0}
           <div class="chips" style="margin-top:6px">
             {#each scheduleTimes as t, i}
               <span class="chip">
                 {t}
-                <button class="chip-x" onclick={() => { scheduleTimes = scheduleTimes.filter((_, j) => j !== i); }}>×</button>
+                <button class="chip-x" onclick={() => removeScheduleTime(i)}>×</button>
               </span>
             {/each}
           </div>

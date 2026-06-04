@@ -108,8 +108,14 @@ pub fn paths_overlap(a: &str, b: &str) -> bool {
     if na == nb {
         return true;
     }
-    let sep = std::path::MAIN_SEPARATOR.to_string();
-    na.starts_with(&format!("{nb}{sep}")) || nb.starts_with(&format!("{na}{sep}"))
+    nested_in(&na, &nb) || nested_in(&nb, &na)
+}
+
+fn nested_in(child: &str, parent: &str) -> bool {
+    let sep = std::path::MAIN_SEPARATOR as u8;
+    child.len() > parent.len()
+        && child.starts_with(parent)
+        && child.as_bytes()[parent.len()] == sep
 }
 
 fn build_globset(patterns: &[String]) -> GlobSet {
@@ -205,8 +211,10 @@ fn walk_tree(root: &Path, ignore: &GlobSet) -> BTreeMap<String, Entry> {
 }
 
 fn blake3_of(path: &Path) -> Option<[u8; 32]> {
-    let bytes = std::fs::read(path).ok()?;
-    Some(*blake3::hash(&bytes).as_bytes())
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut hasher = blake3::Hasher::new();
+    std::io::copy(&mut file, &mut hasher).ok()?;
+    Some(*hasher.finalize().as_bytes())
 }
 
 fn detect_changed(src: &Entry, dst: &Entry, settings: &Settings, compression: bool) -> (bool, String) {
@@ -268,14 +276,14 @@ fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> 
     let mut normalized: BTreeMap<String, Entry> = BTreeMap::new();
 
     if use_compression {
-        for (k, v) in &dest_map {
+        for (k, v) in std::mem::take(&mut dest_map) {
             if let Some(stripped) = k.strip_suffix(compression_ext) {
-                normalized.insert(stripped.to_string(), v.clone());
+                normalized.insert(stripped.to_string(), v);
             } else if !v.is_dir {
                 // Non-compressed file in destination — skip it (not managed)
                 continue;
             } else {
-                normalized.insert(k.clone(), v.clone());
+                normalized.insert(k, v);
             }
         }
     }

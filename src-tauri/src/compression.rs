@@ -79,18 +79,18 @@ pub fn detect_methods() -> Vec<CompressionMethod> {
     let mut methods: Vec<CompressionMethod> = Vec::new();
 
     let zip_avail = has_powershell_zip();
+    let has_7z = has_binary("7z");
     methods.push(CompressionMethod {
         id: "zip".into(),
         name: if cfg!(windows) { "ZIP (PowerShell)" } else { "ZIP (7z)" }.into(),
         extension: ".zip".into(),
-        available: zip_avail || has_binary("7z"),
-        supports_password: has_binary("7z"),
+        available: zip_avail || has_7z,
+        supports_password: has_7z,
         download_url: "https://www.7-zip.org/download.html".into(),
         default_level: 5,
         max_level: 9,
     });
 
-    let has_7z = has_binary("7z");
     methods.push(CompressionMethod {
         id: "7z".into(),
         name: "7-Zip".into(),
@@ -158,24 +158,31 @@ pub fn compress_file(src: &Path, dst: &Path, method: &str, level: u32, password:
         "zip" => compress_zip(src, dst, level, password),
         "7z" => compress_7z(src, dst, level, password),
         "zstd" => compress_zstd(src, dst, level),
-        "gzip" => compress_gzip(src, dst, level),
-        "xz" => compress_xz(src, dst, level),
-        "lz4" => compress_lz4(src, dst, level),
+        "gzip" => compress_stream("gzip", src, dst, level),
+        "xz" => compress_stream("xz", src, dst, level),
+        "lz4" => compress_stream("lz4", src, dst, level),
         _ => Err(format!("Méthode de compression inconnue : {method}")),
     }
 }
 
-fn compress_zip(src: &Path, dst: &Path, _level: u32, password: Option<&str>) -> Result<(), String> {
+fn compress_zip(src: &Path, dst: &Path, level: u32, password: Option<&str>) -> Result<(), String> {
     if let Some(pw) = password {
-        return compress_7z(src, dst, _level, Some(pw));
+        return compress_7z(src, dst, level, Some(pw));
     }
     if cfg!(windows) {
+        // Compress-Archive n'accepte que des paliers nommes.
+        let ps_level = match level {
+            0 => "NoCompression",
+            1..=3 => "Fastest",
+            _ => "Optimal",
+        };
         let src_str = src.to_string_lossy();
         let dst_str = dst.to_string_lossy();
         let ps_script = format!(
-            "Compress-Archive -LiteralPath '{}' -DestinationPath '{}' -CompressionLevel Optimal -Force",
+            "Compress-Archive -LiteralPath '{}' -DestinationPath '{}' -CompressionLevel {} -Force",
             src_str.replace('\'', "''"),
-            dst_str.replace('\'', "''")
+            dst_str.replace('\'', "''"),
+            ps_level
         );
         let out = Command::new("powershell")
             .args(["-NoProfile", "-Command", &ps_script])
@@ -187,7 +194,7 @@ fn compress_zip(src: &Path, dst: &Path, _level: u32, password: Option<&str>) -> 
         }
         Ok(())
     } else {
-        compress_7z(src, dst, 5, None)
+        compress_7z(src, dst, level, None)
     }
 }
 
@@ -226,56 +233,27 @@ fn compress_zstd(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
     Ok(())
 }
 
-fn compress_gzip(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
-    let src_str = src.to_string_lossy().to_string();
-    let dst_str = dst.to_string_lossy().to_string();
-    let out = Command::new("gzip")
+/// Outils filtre type `cmd -<level> -c <src> > dst` (gzip, xz, lz4) : on redirige
+/// stdout directement vers le fichier de sortie (streaming, aucun buffer en RAM).
+fn compress_stream(cmd: &str, src: &Path, dst: &Path, level: u32) -> Result<(), String> {
+    let file = std::fs::File::create(dst)
+        .map_err(|e| format!("Création {} échec : {e}", dst.display()))?;
+    let child = Command::new(cmd)
         .arg(format!("-{level}"))
         .arg("-c")
-        .arg(&src_str)
-        .stdout(std::process::Stdio::piped())
+        .arg(src)
+        .stdout(std::process::Stdio::from(file))
         .stderr(std::process::Stdio::piped())
-        .output()
-        .map_err(|e| format!("gzip introuvable : {e}"))?;
+        .spawn()
+        .map_err(|e| format!("{cmd} introuvable : {e}"))?;
+    let out = child
+        .wait_with_output()
+        .map_err(|e| format!("{cmd} échec : {e}"))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("gzip échec : {stderr}"));
+        return Err(format!("{cmd} échec : {stderr}"));
     }
-    std::fs::write(dst, &out.stdout).map_err(|e| format!("Écriture {dst_str} échec : {e}"))
-}
-
-fn compress_xz(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
-    let src_str = src.to_string_lossy().to_string();
-    let dst_str = dst.to_string_lossy().to_string();
-    let out = Command::new("xz")
-        .arg(format!("-{level}"))
-        .arg("-c")
-        .arg(&src_str)
-        .stdout(std::process::Stdio::piped())
-        .output()
-        .map_err(|e| format!("xz introuvable : {e}"))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("xz échec : {stderr}"));
-    }
-    std::fs::write(dst, &out.stdout).map_err(|e| format!("Écriture {dst_str} échec : {e}"))
-}
-
-fn compress_lz4(src: &Path, dst: &Path, level: u32) -> Result<(), String> {
-    let src_str = src.to_string_lossy().to_string();
-    let dst_str = dst.to_string_lossy().to_string();
-    let out = Command::new("lz4")
-        .arg(format!("-{level}"))
-        .arg("-c")
-        .arg(&src_str)
-        .stdout(std::process::Stdio::piped())
-        .output()
-        .map_err(|e| format!("lz4 introuvable : {e}"))?;
-    if !out.status.success() {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        return Err(format!("lz4 échec : {stderr}"));
-    }
-    std::fs::write(dst, &out.stdout).map_err(|e| format!("Écriture {dst_str} échec : {e}"))
+    Ok(())
 }
 
 /// Copy mtime from source to destination file for change detection purposes.

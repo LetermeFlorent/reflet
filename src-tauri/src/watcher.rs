@@ -48,21 +48,25 @@ impl WatcherManager {
         }
 
         let p_id = pair_id_owned.clone();
-        std::thread::spawn(move || {
+        let builder = std::thread::Builder::new().name(format!("watch-{p_id}"));
+        let _ = builder.spawn(move || {
             for result in event_rx {
                 if result.is_err() {
                     continue;
                 }
-                let mut map = debounce.lock().unwrap();
                 let now = Instant::now();
+                let mut map = debounce.lock().unwrap_or_else(|e| e.into_inner());
                 let should_trigger = match map.get(&p_id) {
                     Some(last) => now.duration_since(*last) > Duration::from_secs(3),
                     None => true,
                 };
+                if !should_trigger {
+                    continue;
+                }
                 map.insert(p_id.clone(), now);
                 drop(map);
-                if should_trigger {
-                    let _ = sync_tx.try_send(SyncRequest::Pair(p_id.clone()));
+                if let Err(e) = sync_tx.try_send(SyncRequest::Pair(p_id.clone())) {
+                    tracing::debug!("watcher {p_id} : declenchement non transmis ({e})");
                 }
             }
         });
@@ -72,10 +76,14 @@ impl WatcherManager {
 
     pub fn stop(&mut self, pair_id: &str) {
         self.watchers.remove(pair_id);
+        self.debounce
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(pair_id);
     }
 
     pub fn stop_all(&mut self) {
         self.watchers.clear();
-        self.debounce.lock().unwrap().clear();
+        self.debounce.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }

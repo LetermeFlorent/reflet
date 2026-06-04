@@ -6,6 +6,10 @@ Journal des modifications de Reflet (app desktop de synchronisation miroir unidi
 
 _(vide pour l'instant)_
 
+## 2026-06-04
+
+- **Revue de code v1.3.0 + corrections (bugs, perf, duplication)** — revue multi-agents (29 findings confirmes), corrections appliquees : watcher (throttle correct = fin de la famine temps-reel ; purge du debounce au stop ; drops loggues ; resilience au poison de Mutex), config.load (distingue NotFound des erreurs I/O loguees = fin du reset silencieux), sync (blake3 en streaming au lieu de lire le fichier entier en RAM ; dest_map deplace au lieu de clone ; paths_overlap sans allocation), compression (3 fonctions gzip/xz/lz4 quasi-identiques fusionnees en un seul helper `compress_stream` en streaming = dedup + plus de buffer RAM ; niveau respecte pour zip ; has_binary("7z") memoise), +page (drag desactive quand un filtre est actif = fin de la corruption d'ordre), PairEditModal (min/max vide -> 0 sinon save plantait ; regex horaires stricte rejetant 99:99 ; helpers addScheduleTime/removeScheduleTime supprimant 4 duplications ; $effect -> onMount). _Pourquoi : demande utilisateur de revue/optimisation ; backlog laisse pour les gros chantiers risques (empoisonnement Mutex systemique, mot de passe 7z en clair en argument, decoupage de PairEditModal 445 lignes)._
+
 ## 2026-06-03
 
 Modifications de la journee (quoi + pourquoi) :

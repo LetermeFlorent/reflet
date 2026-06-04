@@ -146,7 +146,7 @@
         {#each filteredPairs as p, i (p.id)}
           <div
             class="pair-drag"
-            draggable="true"
+            draggable={!searchQuery}
             role="listitem"
             ondragstart={(e) => dragStart(e, i)}
             ondragover={(e) => dragOver(e, i)}

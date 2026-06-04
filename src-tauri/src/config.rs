@@ -106,10 +106,10 @@ pub struct Config {
 }
 
 pub fn config_path(app: &AppHandle) -> PathBuf {
-    let dir = app
-        .path()
-        .app_config_dir()
-        .unwrap_or_else(|_| PathBuf::from("."));
+    let dir = app.path().app_config_dir().unwrap_or_else(|e| {
+        tracing::error!("app_config_dir indisponible ({e}) — repli sur le dossier courant");
+        PathBuf::from(".")
+    });
     dir.join("settings.json")
 }
 
@@ -117,10 +117,18 @@ pub fn load(app: &AppHandle) -> Config {
     let path = config_path(app);
     match std::fs::read_to_string(&path) {
         Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
-            tracing::warn!("settings.json illisible ({e}), valeurs par défaut");
+            tracing::error!(
+                "settings.json corrompu ({e}) — valeurs par défaut (sera écrasé au prochain enregistrement)"
+            );
             Config::default()
         }),
-        Err(_) => Config::default(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config::default(),
+        Err(e) => {
+            tracing::error!(
+                "settings.json présent mais illisible ({e}) — valeurs par défaut chargées ; éviter d'enregistrer pour ne pas écraser la config existante"
+            );
+            Config::default()
+        }
     }
 }
 
