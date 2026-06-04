@@ -168,15 +168,7 @@ async fn run_due(app: &AppHandle) {
             .cloned()
             .collect()
     };
-    if due.is_empty() {
-        return;
-    }
-    set_busy(app, true);
-    for pair in due {
-        app.state::<AppState>().mark_started(&pair.id);
-        run_one(app, pair, settings.clone()).await;
-    }
-    set_busy(app, false);
+    run_batch(app, due, settings).await;
 }
 
 async fn run_all(app: &AppHandle) {
@@ -185,16 +177,8 @@ async fn run_all(app: &AppHandle) {
         let cfg = state.config.lock().unwrap();
         cfg.pairs.iter().filter(|p| p.enabled).cloned().collect()
     };
-    if pairs.is_empty() {
-        return;
-    }
     let settings = current_settings(app);
-    set_busy(app, true);
-    for pair in pairs {
-        app.state::<AppState>().mark_started(&pair.id);
-        run_one(app, pair, settings.clone()).await;
-    }
-    set_busy(app, false);
+    run_batch(app, pairs, settings).await;
 }
 
 async fn run_pair(app: &AppHandle, id: &str) {
@@ -205,9 +189,20 @@ async fn run_pair(app: &AppHandle, id: &str) {
     };
     let Some(pair) = pair else { return };
     let settings = current_settings(app);
-    app.state::<AppState>().mark_started(&pair.id);
+    run_batch(app, vec![pair], settings).await;
+}
+
+/// Exécute une série de paires sur le worker unique : busy ON, chacune marquée
+/// démarrée puis synchronisée, busy OFF. No-op si la liste est vide.
+async fn run_batch(app: &AppHandle, pairs: Vec<SyncPair>, settings: Settings) {
+    if pairs.is_empty() {
+        return;
+    }
     set_busy(app, true);
-    run_one(app, pair, settings).await;
+    for pair in pairs {
+        app.state::<AppState>().mark_started(&pair.id);
+        run_one(app, pair, settings.clone()).await;
+    }
     set_busy(app, false);
 }
 
