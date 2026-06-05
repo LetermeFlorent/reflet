@@ -102,15 +102,6 @@ select {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.btn-primary {
-  background: var(--accent);
-  border-color: transparent;
-  color: var(--accent-text);
-}
-.btn-primary:hover {
-  background: var(--accent-press);
-  filter: brightness(1.12);
-}
 .btn-danger {
   color: var(--red);
 }

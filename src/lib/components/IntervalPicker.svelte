@@ -64,9 +64,6 @@
   .num {
     width: 90px;
   }
-  .unit {
-    width: 130px;
-  }
   .chk {
     display: flex;
     align-items: center;

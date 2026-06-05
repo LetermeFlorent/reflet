@@ -100,9 +100,4 @@ impl WatcherManager {
             .remove(pair_id);
     }
 
-    #[allow(dead_code)]
-    pub fn stop_all(&mut self) {
-        self.watchers.clear();
-        self.debounce.lock().unwrap_or_else(|e| e.into_inner()).clear();
-    }
 }

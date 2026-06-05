@@ -1,3 +1,4 @@
+pub(super) use super::util::verbatim;
 use crate::config::SyncPair;
 use std::collections::HashMap;
 use std::fs::File;
@@ -6,20 +7,6 @@ use std::path::{Path, PathBuf};
 
 /// Entrée interne stockée dans l'archive : mtimes source au moment de la sauvegarde.
 pub(super) const STATE_ENTRY: &str = ".reflet/state.json";
-
-#[cfg(windows)]
-pub(super) fn verbatim(p: &Path) -> PathBuf {
-    let s = p.to_string_lossy().replace('/', "\\");
-    if s.starts_with("\\\\") {
-        PathBuf::from(s)
-    } else {
-        PathBuf::from(format!("\\\\?\\{s}"))
-    }
-}
-#[cfg(not(windows))]
-pub(super) fn verbatim(p: &Path) -> PathBuf {
-    p.to_path_buf()
-}
 
 /// Ouvre en lecture SANS verrou exclusif (FILE_SHARE_READ|WRITE|DELETE) et via \\?\
 /// pour gérer les noms finissant par « . »/espace et les chemins longs.

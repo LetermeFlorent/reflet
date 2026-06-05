@@ -1,3 +1,4 @@
+use super::util::verbatim;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -11,20 +12,6 @@ fn unique_tmp(dst: &Path) -> PathBuf {
         Some(p) => p.join(name),
         None => PathBuf::from(name),
     }
-}
-
-#[cfg(windows)]
-fn verbatim(p: &Path) -> PathBuf {
-    let s = p.to_string_lossy().replace('/', "\\");
-    if s.starts_with("\\\\") {
-        PathBuf::from(s)
-    } else {
-        PathBuf::from(format!("\\\\?\\{}", s))
-    }
-}
-#[cfg(not(windows))]
-fn verbatim(p: &Path) -> PathBuf {
-    p.to_path_buf()
 }
 
 pub(super) fn copy_file_atomic(src: &Path, dst: &Path) -> std::io::Result<()> {

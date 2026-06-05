@@ -20,3 +20,7 @@ Thumbs.db
 
 # Notes internes IA (ne pas publier)
 .ia/
+
+# Artefacts logs / tests
+*.log
+test_output.txt

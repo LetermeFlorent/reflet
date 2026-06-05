@@ -1,6 +1,0 @@
-
-> reflet@1.3.0 tauri
-> tauri dev
-
-failed to run 'cargo metadata' command to get workspace directory: failed to run command cargo metadata --no-deps --format-version 1: program not found
-       Error failed to run 'cargo metadata' command to get workspace directory: failed to run command cargo metadata --no-deps --format-version 1: program not found

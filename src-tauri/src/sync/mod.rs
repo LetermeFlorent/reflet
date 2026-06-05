@@ -14,16 +14,6 @@ pub use plan::dry_run;
 pub use scan::paths_overlap;
 pub use types::SyncPlan;
 
-/// Chemin de l'archive unique d'une paire (mode compression), pour détecter les
-/// collisions entre paires. None si la paire n'est pas en mode archive.
-pub fn archive_target(pair: &SyncPair) -> Option<std::path::PathBuf> {
-    if pair.compression.method != "off" && !pair.backup_mode {
-        Some(archive_io::archive_path(pair))
-    } else {
-        None
-    }
-}
-
 use crate::config::{Settings, SyncPair};
 use crate::state::AppState;
 use exec::execute_plan;
@@ -33,6 +23,16 @@ use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager};
 use types::SyncOutcome;
 use util::{log, now_iso};
+
+/// Chemin de l'archive unique d'une paire (mode compression), pour détecter les
+/// collisions entre paires. None si la paire n'est pas en mode archive.
+pub fn archive_target(pair: &SyncPair) -> Option<std::path::PathBuf> {
+    if pair.compression.method != "off" && !pair.backup_mode {
+        Some(archive_io::archive_path(pair))
+    } else {
+        None
+    }
+}
 
 /// Retourne la raison si la source ou la destination d'une paire est introuvable.
 fn missing_folder(pair: &SyncPair) -> Option<String> {

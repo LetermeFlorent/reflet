@@ -1,6 +1,23 @@
 use crate::state::{AppState, LogEntry};
 use chrono::Utc;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
+
+/// Chemin « verbatim » Windows (`\\?\`) : gère chemins longs et noms finissant par un
+/// point/espace. No-op hors Windows. Centralisé ici (utilisé par io.rs et archive_io.rs).
+#[cfg(windows)]
+pub(super) fn verbatim(p: &Path) -> PathBuf {
+    let s = p.to_string_lossy().replace('/', "\\");
+    if s.starts_with("\\\\") {
+        PathBuf::from(s)
+    } else {
+        PathBuf::from(format!("\\\\?\\{s}"))
+    }
+}
+#[cfg(not(windows))]
+pub(super) fn verbatim(p: &Path) -> PathBuf {
+    p.to_path_buf()
+}
 
 pub(super) fn now_iso() -> String {
     Utc::now().to_rfc3339()
