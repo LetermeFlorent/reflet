@@ -41,6 +41,15 @@ fn default_true() -> bool {
     true
 }
 
+/// Filtre de taille incohérent (min > max non nul) = aucun fichier ne passe jamais,
+/// silencieusement. On le refuse à l'enregistrement plutôt que de laisser une paire muette.
+fn validate_size_filter(min: u64, max: u64) -> Result<(), String> {
+    if max > 0 && min > max {
+        return Err("Taille minimale supérieure à la taille maximale.".into());
+    }
+    Ok(())
+}
+
 /// Empêche deux paires en mode archive de viser le même fichier .zip (elles
 /// s'effaceraient mutuellement au nettoyage). Retourne le nom de la paire en conflit.
 fn archive_conflict(state: &AppState, self_id: &str, pair: &SyncPair) -> Option<String> {
@@ -60,6 +69,7 @@ pub fn add_pair(app: AppHandle, state: State<AppState>, new: NewPair) -> Result<
     if sync::paths_overlap(&new.source, &new.destination) {
         return Err("Source et destination imbriquées (interdit)".into());
     }
+    validate_size_filter(new.min_file_size, new.max_file_size)?;
     let id = uuid::Uuid::new_v4().to_string();
     let source = new.source.clone();
     let watch_realtime = new.watch_realtime;
@@ -104,6 +114,7 @@ pub fn update_pair(app: AppHandle, state: State<AppState>, pair: SyncPair) -> Re
     if sync::paths_overlap(&pair.source, &pair.destination) {
         return Err("Source et destination imbriquées (interdit)".into());
     }
+    validate_size_filter(pair.min_file_size, pair.max_file_size)?;
     if let Some(other) = archive_conflict(&state, &pair.id, &pair) {
         return Err(format!(
             "Conflit d'archive avec « {other} » (même fichier .zip de destination). Change le nom de l'archive ou la destination."

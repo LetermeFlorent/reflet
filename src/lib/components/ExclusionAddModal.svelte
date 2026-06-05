@@ -17,6 +17,17 @@
   let files = $state<string[]>([]);
   let manual = $state(initial);
 
+  // Changer d'onglet repart à zéro : sinon des chips sélectionnées dans un mode
+  // restent « fantômes » et le mode actif n'utilise que sa propre liste à la validation.
+  function setMode(m: Mode) {
+    if (m === mode) return;
+    mode = m;
+    folders = [];
+    files = [];
+    recursive = true;
+    manual = "";
+  }
+
   function base(p: string): string {
     return p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? p;
   }
@@ -62,9 +73,9 @@
     <h1>{initial ? "Modifier l'exclusion" : "Ajouter des exclusions"}</h1>
 
     <div class="tabs">
-      <button class="tab" class:on={mode === "folder"} onclick={() => (mode = "folder")}>Dossiers</button>
-      <button class="tab" class:on={mode === "files"} onclick={() => (mode = "files")}>Fichiers</button>
-      <button class="tab" class:on={mode === "manual"} onclick={() => (mode = "manual")}>Manuel (glob)</button>
+      <button class="tab" class:on={mode === "folder"} onclick={() => setMode("folder")}>Dossiers</button>
+      <button class="tab" class:on={mode === "files"} onclick={() => setMode("files")}>Fichiers</button>
+      <button class="tab" class:on={mode === "manual"} onclick={() => setMode("manual")}>Manuel (glob)</button>
     </div>
 
     {#if mode === "folder"}

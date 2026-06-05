@@ -2,6 +2,7 @@ use super::diff::detect_changed;
 use super::scan::{build_globset, paths_overlap, walk_tree};
 use super::types::{CopyOp, DeleteOp, Entry, ExecPlan, PlanItem, SyncPlan};
 use crate::config::{Settings, SyncPair};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 pub(super) fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPlan, String> {
@@ -106,18 +107,19 @@ pub(super) fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPla
         }
     }
 
+    let src_keys: HashSet<&str> = src_map.keys().map(String::as_str).collect();
     let mut extras: Vec<&Entry> = dest_map
         .iter()
-        .filter(|(k, _)| !src_map.contains_key(*k))
+        .filter(|(k, _)| !src_keys.contains(k.as_str()))
         .map(|(_, e)| e)
         .collect();
     let extra_entries = extras.len();
 
     extras.sort_by(|a, b| a.rel.cmp(&b.rel));
-    let mut last_root: Option<String> = None;
+    let mut last_root: Option<&str> = None;
     for e in extras {
-        let covered = match &last_root {
-            Some(r) => e.rel.starts_with(&format!("{r}/")),
+        let covered = match last_root {
+            Some(r) => e.rel.starts_with(r) && e.rel.as_bytes().get(r.len()) == Some(&b'/'),
             None => false,
         };
         if covered {
@@ -128,7 +130,7 @@ pub(super) fn build_plan(pair: &SyncPair, settings: &Settings) -> Result<ExecPla
             abs: dst_abs_of(&e.rel),
             is_dir: e.is_dir,
         });
-        last_root = Some(e.rel.clone());
+        last_root = Some(e.rel.as_str());
     }
 
     create_dirs.sort_by_key(|(rel, _)| rel.matches('/').count());

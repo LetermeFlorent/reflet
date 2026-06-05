@@ -65,7 +65,7 @@
       <tr><th class="c-type">Type</th><th>Motif</th><th class="c-act">Actions</th></tr>
     </thead>
     <tbody>
-      {#each patterns as p, i (p + i)}
+      {#each patterns as p, i (p)}
         <tr>
           <td class="c-type">{kind(p)}</td>
           <td><code>{p}</code></td>

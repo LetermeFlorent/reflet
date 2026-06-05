@@ -48,10 +48,7 @@ fn is_schedule_due(times: &[String]) -> bool {
             // à 00h00, la minute précédente est 23h59 = 1439).
             let prev_min = if now_min == 0 { 1439 } else { now_min - 1 };
             if now_min == target_min || prev_min == target_min {
-                let sec = now.second() as u64;
-                if sec < 65 {
-                    return true;
-                }
+                return true;
             }
         }
     }
@@ -240,7 +237,19 @@ async fn run_pair_task(app: &AppHandle, pair: SyncPair, settings: Settings) {
     }
 
     // Limite la concurrence : attend un jeton si MAX_CONCURRENT_SYNCS sont déjà en cours.
-    let permit = app.state::<AppState>().sync_sem.clone().acquire_owned().await.ok();
+    // Si le sémaphore est fermé (ne devrait jamais arriver), on ABANDONNE — lancer la
+    // synchro sans jeton contournerait la limite de concurrence.
+    let Ok(permit) = app.state::<AppState>().sync_sem.clone().acquire_owned().await else {
+        let state = app.state::<AppState>();
+        let mut active = state.active.lock().unwrap();
+        active.remove(&pair.id);
+        let empty = active.is_empty();
+        drop(active);
+        if empty {
+            set_busy(app, false);
+        }
+        return;
+    };
     app.state::<AppState>().mark_started(&pair.id);
 
     let app2 = app.clone();

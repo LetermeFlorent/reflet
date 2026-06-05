@@ -73,10 +73,12 @@
   </header>
 
   <section class="card def">
-    <h2>Méthode par défaut</h2>
-    <p class="muted small">
-      Pré-sélectionnée pour les nouvelles paires (modifiable ensuite dans « Modifier la paire »).
-    </p>
+    <div class="def-text">
+      <h2>Méthode par défaut</h2>
+      <p class="muted small">
+        Pré-sélectionnée pour les nouvelles paires (modifiable ensuite dans « Modifier la paire »).
+      </p>
+    </div>
     {#if local}
       <div class="row ctrls">
         <div class="method-sel">
@@ -155,18 +157,35 @@
   .def {
     padding: var(--s3) var(--s4);
     margin-bottom: var(--s3);
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+  }
+  .def-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .def-text p {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .def h2 {
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     font-size: 14px;
+    white-space: nowrap;
   }
   .small {
     font-size: 12px;
     margin-bottom: var(--s3);
   }
   .ctrls {
-    gap: var(--s4);
-    flex-wrap: wrap;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s2);
+    width: 240px;
   }
   .method-sel {
     min-width: 240px;
@@ -206,7 +225,7 @@
     min-width: 200px;
   }
   .lvl.hidden {
-    visibility: hidden;
+    display: none;
   }
   .lvl input {
     width: 100%;

@@ -24,16 +24,18 @@
     const tick = () => {
       const p = store.progress;
       if (!p || p.total <= 0 || p.done <= 0) {
-        etaSec = null;
+        if (etaSec !== null) etaSec = null;
         return;
       }
       const elapsed = (Date.now() - startAt) / 1000;
       if (elapsed <= 0.5) {
-        etaSec = null;
+        if (etaSec !== null) etaSec = null;
         return;
       }
       const rate = p.done / elapsed;
-      etaSec = Math.max(0, Math.round((p.total - p.done) / rate));
+      // N'assigner que si la valeur change : évite une réactivité inutile chaque seconde.
+      const v = Math.max(0, Math.round((p.total - p.done) / rate));
+      if (v !== etaSec) etaSec = v;
     };
     tick();
     const id = setInterval(tick, 1000);

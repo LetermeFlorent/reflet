@@ -34,31 +34,42 @@
 </script>
 
 <div class="page-scroll">
-  <header class="page-head">
-    <h1>Exclusions globales</h1>
-    <div class="spacer"></div>
+  <div class="head-row">
+    <div class="head-text">
+      <h1>Exclusions globales</h1>
+      <p class="muted sub">
+        Motifs appliqués à toutes les paires. Les dossiers et fichiers correspondants ne sont jamais
+        copiés vers la destination ni supprimés. Chaque paire peut aussi avoir ses propres exclusions
+        (dans « Modifier la paire »).
+      </p>
+    </div>
     <button class="btn" onclick={() => mgr?.openAdd()} disabled={busy}>+ Ajouter</button>
-  </header>
-  <p class="muted sub">
-    Motifs appliqués à toutes les paires. Les dossiers et fichiers correspondants ne sont jamais
-    copiés vers la destination ni supprimés. Chaque paire peut aussi avoir ses propres exclusions
-    (dans « Modifier la paire »).
-  </p>
+  </div>
 
   <ExclusionsManager bind:this={mgr} {patterns} {onAdd} {onReplace} {onRemove} {busy} showAddButton={false} />
 </div>
 
 <style>
-  .page-head {
+  .head-row {
     display: flex;
-    align-items: center;
-    gap: var(--s2);
-    margin-bottom: var(--s2);
+    align-items: flex-end;
+    gap: var(--s4);
+    margin-bottom: var(--s4);
+  }
+  .head-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .head-text h1 {
+    margin-bottom: 4px;
+  }
+  .head-row .btn {
+    flex: 0 0 auto;
   }
   .sub {
     font-size: 12px;
     max-width: 640px;
-    margin-bottom: var(--s4);
     line-height: 1.55;
+    margin: 0;
   }
 </style>

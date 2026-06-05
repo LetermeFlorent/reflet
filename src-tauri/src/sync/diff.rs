@@ -19,6 +19,10 @@ pub(super) fn detect_changed(src: &Entry, dst: &Entry, settings: &Settings) -> (
     if settings.verify_by_content == "blake3" {
         match (blake3_of(&src.abs), blake3_of(&dst.abs)) {
             (Some(a), Some(b)) if a != b => return (true, "content".into()),
+            // Source ou destination illisible : on NE peut PAS conclure « identique ».
+            // Traiter comme modifié force une recopie (sûr) plutôt qu'un faux négatif
+            // silencieux qui laisserait la destination désynchronisée.
+            (None, _) | (_, None) => return (true, "content".into()),
             _ => {}
         }
     }

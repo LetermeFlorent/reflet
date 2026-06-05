@@ -6,6 +6,8 @@
   import IntervalPicker from "$lib/components/IntervalPicker.svelte";
   import Select from "$lib/components/Select.svelte";
   import { formatInterval } from "$lib/format";
+  import { onMount, onDestroy } from "svelte";
+  import { getVersion } from "@tauri-apps/api/app";
 
   const verifyOptions = [
     { value: "off", label: "Taille + date (rapide)" },
@@ -15,6 +17,20 @@
     { value: "trash", label: "Corbeille (recommandé)" },
     { value: "permanent", label: "Permanent" },
   ];
+  const themeOptions = [
+    { value: "system", label: "Système (suit l'OS)" },
+    { value: "light", label: "Clair" },
+    { value: "dark", label: "Sombre" },
+  ];
+
+  let appVersion = $state("");
+  onMount(async () => {
+    try {
+      appVersion = await getVersion();
+    } catch {
+      appVersion = "";
+    }
+  });
 
   let local = $state<Settings | null>(null);
   let pending = $state(false);
@@ -48,6 +64,15 @@
         pending = false;
       }
     }, 400);
+  });
+
+  onDestroy(() => {
+    clearTimeout(timer);
+    // Sauvegarde en attente (réglage modifié <400 ms avant de quitter la page) : on la
+    // flush au lieu de la perdre. clearTimeout au-dessus évite un double-envoi.
+    if (pending && local) {
+      api.updateSettings(JSON.parse(JSON.stringify(local)) as Settings).catch(() => {});
+    }
   });
 </script>
 
@@ -188,6 +213,25 @@
         </div>
         <Switch bind:checked={local.compactCards} />
       </div>
+
+      <div class="setting">
+        <div class="info">
+          <div class="name">Thème</div>
+          <div class="muted">« Système » suit le thème de l'OS, ou force « Clair » / « Sombre ».</div>
+        </div>
+        <Select bind:value={local.theme} options={themeOptions} width="200px" />
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>À propos</h2>
+      <div class="setting">
+        <div class="info">
+          <div class="name">Version</div>
+          <div class="muted">Reflet — synchronisation miroir unidirectionnelle.</div>
+        </div>
+        <span class="muted">v{appVersion} <span class="oas">o.a.s</span></span>
+      </div>
     </section>
   </div>
 {/if}
@@ -236,6 +280,11 @@
   }
   .num {
     width: 72px;
+  }
+  .oas {
+    font-size: 9px;
+    opacity: 0.5;
+    margin-left: 2px;
   }
   .danger-note {
     padding: var(--s2) var(--s3);

@@ -35,14 +35,14 @@ fn ext_sig_path(app: &AppHandle, pair_id: &str) -> Option<PathBuf> {
     Some(dir.join(format!("{pair_id}.sig")))
 }
 fn read_ext_sig(app: &AppHandle, pair_id: &str) -> Option<String> {
-    std::fs::read_to_string(ext_sig_path(app, pair_id)?).ok()
+    std::fs::read_to_string(verbatim(&ext_sig_path(app, pair_id)?)).ok()
 }
 fn write_ext_sig(app: &AppHandle, pair_id: &str, sig: &str) {
     if let Some(p) = ext_sig_path(app, pair_id) {
         if let Some(dir) = p.parent() {
-            let _ = std::fs::create_dir_all(dir);
+            let _ = std::fs::create_dir_all(verbatim(dir));
         }
-        let _ = std::fs::write(p, sig);
+        let _ = std::fs::write(verbatim(&p), sig);
     }
 }
 
@@ -279,7 +279,10 @@ pub fn run_archive_sync(app: &AppHandle, pair: &SyncPair, settings: &Settings) -
         let mut wrote = false;
 
         if matches!(change, Change::Unchanged) && carry_forward(&mut zw, old.as_mut(), rel) {
-            new_mtimes.insert(rel.clone(), *mtime);
+            // Version recopiée = ancienne → conserver son mtime d'origine (cf. carry_forward plus bas).
+            if let Some(&m) = idx.mtimes.get(rel) {
+                new_mtimes.insert(rel.clone(), m);
+            }
             wrote = true;
         }
 
@@ -302,7 +305,13 @@ pub fn run_archive_sync(app: &AppHandle, pair: &SyncPair, settings: &Settings) -
                         let _ = zw.abort_file();
                         out.errors += 1;
                         if carry_forward(&mut zw, old.as_mut(), rel) {
-                            new_mtimes.insert(rel.clone(), *mtime);
+                            // Octets recopiés = ANCIENNE version : enregistrer son mtime d'origine,
+                            // pas celui de la source courante. Sinon le fast-path taille+mtime
+                            // conclurait à tort « inchangé » au prochain passage et la nouvelle
+                            // version ne serait jamais archivée.
+                            if let Some(&m) = idx.mtimes.get(rel) {
+                                new_mtimes.insert(rel.clone(), m);
+                            }
                             log(app, &pair.id, "error", "error", Some(rel.clone()), "écriture échec — version précédente conservée".into());
                         } else {
                             log(app, &pair.id, "error", "error", Some(rel.clone()), "écriture dans l'archive échec".into());
@@ -314,7 +323,10 @@ pub fn run_archive_sync(app: &AppHandle, pair: &SyncPair, settings: &Settings) -
                 }
                 Err(e) => {
                     if carry_forward(&mut zw, old.as_mut(), rel) {
-                        new_mtimes.insert(rel.clone(), *mtime);
+                        // Version recopiée = ancienne → mtime d'origine (cf. ci-dessus).
+                        if let Some(&m) = idx.mtimes.get(rel) {
+                            new_mtimes.insert(rel.clone(), m);
+                        }
                         log(app, &pair.id, "warn", "skip", Some(rel.clone()), "source illisible — version précédente conservée".into());
                     } else {
                         out.errors += 1;

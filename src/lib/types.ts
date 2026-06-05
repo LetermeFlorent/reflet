@@ -63,6 +63,7 @@ export interface Settings {
   compactCards: boolean;
   defaultCompressionMethod: string;
   defaultCompressionLevel: number;
+  theme: "system" | "light" | "dark";
 }
 
 export interface AppStateDto {

@@ -65,7 +65,10 @@
     return a === b || a.startsWith(b + "/") || b.startsWith(a + "/");
   });
 
-  const canSave = $derived(source.trim() !== "" && destination.trim() !== "" && !overlap && !saving);
+  const sizeValid = $derived(!(maxFileSize > 0 && minFileSize > maxFileSize));
+  const canSave = $derived(
+    source.trim() !== "" && destination.trim() !== "" && !overlap && sizeValid && !saving,
+  );
 
   async function pick(which: "source" | "destination") {
     try {
@@ -220,6 +223,9 @@
               <input class="input" type="number" min="0" bind:value={maxFileSize} placeholder="0 = aucun filtre" />
             </div>
           </div>
+          {#if !sizeValid}
+            <div class="err">Taille min. supérieure à la taille max. — aucun fichier ne passerait.</div>
+          {/if}
           <div class="field">
             <span class="label">Exclusions propres à cette paire</span>
             <ExclusionsManager

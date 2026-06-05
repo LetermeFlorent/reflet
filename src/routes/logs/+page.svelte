@@ -24,8 +24,16 @@
   onMount(() => {
     reload();
     let un: UnlistenFn | undefined;
-    listen("sync:finished", () => reload()).then((fn) => (un = fn));
-    return () => un?.();
+    let cancelled = false;
+    listen("sync:finished", () => reload()).then((fn) => {
+      // Démontage avant résolution : on libère immédiatement pour ne pas fuiter le listener.
+      if (cancelled) fn();
+      else un = fn;
+    });
+    return () => {
+      cancelled = true;
+      un?.();
+    };
   });
 
   async function copyLogs() {

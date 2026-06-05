@@ -76,10 +76,16 @@ pub struct Settings {
     pub default_compression_method: String,
     #[serde(default)]
     pub default_compression_level: u32,
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn default_off_method() -> String {
     "off".into()
+}
+
+fn default_theme() -> String {
+    "system".into()
 }
 
 impl Default for Settings {
@@ -106,6 +112,7 @@ impl Default for Settings {
             compact_cards: true,
             default_compression_method: "off".into(),
             default_compression_level: 0,
+            theme: "system".into(),
         }
     }
 }
@@ -175,5 +182,13 @@ pub fn save(app: &AppHandle, cfg: &Config) -> Result<(), String> {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    // Écriture atomique : tmp puis rename. Un crash en cours d'écriture ne laisse
+    // jamais un settings.json tronqué (qui retomberait sur les valeurs par défaut
+    // au prochain load = perte de toutes les paires).
+    let tmp = path.with_file_name(format!("settings.json.{}.tmp", std::process::id()));
+    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        e.to_string()
+    })
 }

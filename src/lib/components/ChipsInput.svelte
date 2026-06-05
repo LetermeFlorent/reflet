@@ -17,7 +17,8 @@
 
   function add() {
     const v = input.trim();
-    if (v && !items.includes(v)) items.push(v);
+    // Réassignation (pas .push) : garantit la propagation au parent via $bindable (Svelte 5).
+    if (v && !items.includes(v)) items = [...items, v];
     input = "";
   }
 </script>
@@ -34,7 +35,7 @@
 {#if items.length}
   <div class="chips">
     {#each items as it, i (it)}
-      <span class="chip">{it}<button class="x" onclick={() => items.splice(i, 1)} aria-label="retirer">×</button></span>
+      <span class="chip">{it}<button class="x" onclick={() => (items = items.filter((_, idx) => idx !== i))} aria-label="retirer">×</button></span>
     {/each}
   </div>
 {/if}

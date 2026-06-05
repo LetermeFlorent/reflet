@@ -7,11 +7,24 @@
   import { api } from "$lib/ipc";
   import ConfirmModal from "$lib/components/ConfirmModal.svelte";
   import Loader from "$lib/components/Loader.svelte";
+  import { fly } from "svelte/transition";
 
   let { children } = $props();
 
-  // Loader affiché au moins 3 s au démarrage, même si l'état charge plus vite.
-  let minElapsed = $state(false);
+  // Thème : « Système » suit l'OS (matchMedia), « Clair »/« Sombre » forcés via data-theme.
+  $effect(() => {
+    const t = store.settings?.theme ?? "system";
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const resolve = () => {
+      const dark = t === "dark" || (t === "system" && mql.matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    };
+    resolve();
+    if (t === "system") {
+      mql.addEventListener("change", resolve);
+      return () => mql.removeEventListener("change", resolve);
+    }
+  });
 
   async function toggleFullscreen() {
     const w = getCurrentWindow();
@@ -21,7 +34,6 @@
   onMount(() => {
     store.refresh();
     store.loadCompressionMethods();
-    const minTimer = setTimeout(() => (minElapsed = true), 3000);
     let cleanup: (() => void) | undefined;
     store.initListeners().then((fn) => (cleanup = fn));
 
@@ -38,7 +50,6 @@
 
     return () => {
       cleanup?.();
-      clearTimeout(minTimer);
       window.removeEventListener("keydown", onKey);
     };
   });
@@ -52,7 +63,7 @@
   ];
 </script>
 
-{#if !store.loaded || !minElapsed}
+{#if !store.loaded}
   <Loader />
 {/if}
 
@@ -76,7 +87,11 @@
   </aside>
 
   <main class="main">
-    {@render children()}
+    {#key $page.url.pathname}
+      <div class="route" in:fly={{ y: 8, duration: 180 }}>
+        {@render children()}
+      </div>
+    {/key}
   </main>
 </div>
 
@@ -148,13 +163,20 @@
   .navitem.active::after {
     content: "";
     position: absolute;
-    right: 8px;
+    right: 10px;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%) scale(1);
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--text);
+    animation: navDot 0.22s var(--ease);
+  }
+  @keyframes navDot {
+    from {
+      opacity: 0;
+      transform: translateY(-50%) scale(0);
+    }
   }
   .ic {
     width: 18px;
@@ -172,6 +194,9 @@
     padding: 0;
     min-width: 0;
     min-height: 0;
+  }
+  .route {
+    height: 100%;
   }
 
   .toasts {
