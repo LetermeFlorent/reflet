@@ -148,11 +148,12 @@
   .navitem.active::after {
     content: "";
     position: absolute;
-    right: 0;
-    top: 15%;
-    height: 70%;
-    width: 3px;
-    border-radius: 3px 0 0 3px;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
     background: var(--accent);
   }
   .ic {
